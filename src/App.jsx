@@ -1,563 +1,113 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
-// ─── NO HARDCODED DISCOVERIES — real data only ───
+// ─── DESIGN TOKENS ───
+const T = {
+  bg: "#E2D5BC",
+  paper: "#EDE2CE",
+  ink: "#2C2416",
+  inkLight: "#4E3F2E",
+  inkFaint: "#8C7A5E",
+  inkGhost: "#BFB094",
+  accent: "#B83A24",
+  accentSoft: "rgba(184,58,36,0.1)",
+  teal: "#2A7C6F",
+  tealSoft: "rgba(42,124,111,0.1)",
+  gold: "#7A5A0E",
+  goldSoft: "rgba(122,90,14,0.1)",
+  rust: "#6E4420",
+  green: "#4A7C59",
+  greenSoft: "rgba(74,124,89,0.1)",
+  neon: "#7B4DAA",
+  neonSoft: "rgba(123,77,170,0.1)",
+  industrial: "#6B6B6B",
+  industrialSoft: "rgba(107,107,107,0.1)",
+  shadow: "rgba(44,36,22,0.18)",
+  stain: "#6E4420",
+  // Heavy grain + foxing spots + uneven yellowing
+  grain: `url("data:image/svg+xml,%3Csvg viewBox='0 0 600 600' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='6' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.09'/%3E%3Ccircle cx='120' cy='80' r='6' fill='%236E4420' opacity='0.12'/%3E%3Ccircle cx='480' cy='150' r='4' fill='%236E4420' opacity='0.1'/%3E%3Ccircle cx='350' cy='90' r='3' fill='%235C3A18' opacity='0.08'/%3E%3Ccircle cx='90' cy='320' r='5' fill='%236E4420' opacity='0.1'/%3E%3Ccircle cx='530' cy='400' r='7' fill='%235C3A18' opacity='0.09'/%3E%3Ccircle cx='200' cy='500' r='4' fill='%236E4420' opacity='0.11'/%3E%3Ccircle cx='420' cy='530' r='3' fill='%235C3A18' opacity='0.07'/%3E%3Ccircle cx='60' cy='180' r='2' fill='%236E4420' opacity='0.13'/%3E%3Ccircle cx='550' cy='250' r='5' fill='%236E4420' opacity='0.08'/%3E%3Ccircle cx='300' cy='350' r='2' fill='%235C3A18' opacity='0.06'/%3E%3Ccircle cx='150' cy='450' r='6' fill='%236E4420' opacity='0.07'/%3E%3Ccircle cx='470' cy='60' r='3' fill='%235C3A18' opacity='0.1'/%3E%3C/svg%3E")`,
+};
 
-// ─── VIBE ROUTE DEFINITIONS ───
 const VIBE_ROUTES = {
-  any: { label: "Surprise Me", icon: "🎲", color: "#4ECDC4", desc: "A bit of everything" },
-  industrial: { label: "Industrial Decay", icon: "🏚️", color: "#8B8682", desc: "Warehouses, brutalism, rust" },
-  green: { label: "Green Lungs", icon: "🌿", color: "#6BCB77", desc: "Gardens, overgrown alleys, trees" },
-  neon: { label: "Neon Path", icon: "💡", color: "#FF6EC7", desc: "Indie shops, lit signs, nightlife" },
+  any: { label: "Surprise Me", icon: "🎲", color: T.teal, soft: T.tealSoft, desc: "A bit of everything" },
+  industrial: { label: "Industrial Decay", icon: "🏚️", color: T.industrial, soft: T.industrialSoft, desc: "Warehouses, brutalism, rust" },
+  green: { label: "Green Lungs", icon: "🌿", color: T.green, soft: T.greenSoft, desc: "Gardens, overgrown alleys, trees" },
+  neon: { label: "Neon Path", icon: "💡", color: T.neon, soft: T.neonSoft, desc: "Indie shops, lit signs, nightlife" },
 };
 
 const ROUTE_NAMES = {
-  any: ["The Long Way Round", "The Scenic Detour", "The Wanderer's Path", "The Serendipity Line", "The Discovery Arc"],
-  industrial: ["The Rust Belt", "The Concrete Drift", "The Machine Walk", "The Foundry Line", "The Grey Mile"],
-  green: ["The Breathing Route", "The Overgrown Way", "The Chlorophyll Trail", "The Quiet Green", "The Root Path"],
-  neon: ["The Glow Circuit", "The Neon Crawl", "The Shopfront Shuffle", "The Pixel Walk", "The Late Night Line"],
+  any: ["The Long Way Round","The Scenic Detour","The Wanderer's Path","The Serendipity Line","The Discovery Arc"],
+  industrial: ["The Rust Belt","The Concrete Drift","The Machine Walk","The Foundry Line","The Grey Mile"],
+  green: ["The Breathing Route","The Overgrown Way","The Chlorophyll Trail","The Quiet Green","The Root Path"],
+  neon: ["The Glow Circuit","The Neon Crawl","The Shopfront Shuffle","The Pixel Walk","The Late Night Line"],
 };
 
-const VIBE_COLORS = { industrial: "#8B8682", green: "#6BCB77", neon: "#FF6EC7", any: "#4ECDC4", weird: "#FF6B35", hidden: "#4ECDC4", quiet: "#7B68EE", art: "#FF1493", secret: "#FFD700" };
+const VIBE_COLORS = { industrial: T.industrial, green: T.green, neon: T.neon, any: T.teal, weird: T.accent, hidden: T.teal, quiet: T.gold, art: T.neon, secret: T.gold };
 
-function seededShuffle(arr, seed) {
-  const a = [...arr];
-  let s = seed;
-  for (let i = a.length - 1; i > 0; i--) {
-    s = (s * 16807 + 0) % 2147483647;
-    const j = s % (i + 1);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
+function seededShuffle(arr, seed) { const a=[...arr]; let s=seed; for(let i=a.length-1;i>0;i--){s=(s*16807+0)%2147483647; const j=s%(i+1);[a[i],a[j]]=[a[j],a[i]];} return a; }
 
-// ─── OVERPASS API: REAL PLACE DISCOVERY ───
-
-// Map OSM amenity/leisure/shop tags to our vibe categories
+// ─── OVERPASS API ───
 const OSM_VIBE_MAP = {
-  industrial: {
-    tags: ['industrial', 'warehouse', 'works', 'factory', 'railway', 'abandoned', 'ruins', 'bunker', 'water_tower', 'silo', 'chimney', 'gasometer', 'crane', 'bridge'],
-    icon: "🏚️",
-    challenges: [
-      "Photo the most textured wall you can find.",
-      "Capture any rust, peeling paint, or weathered signage.",
-      "Photograph a detail nobody would normally notice.",
-      "Find something geometric — pipes, girders, brickwork — and frame it.",
-    ],
-  },
-  green: {
-    tags: ['park', 'garden', 'nature_reserve', 'allotments', 'community_garden', 'grass', 'meadow', 'forest', 'tree', 'pond', 'lake', 'cemetery', 'flower_bed', 'dog_park'],
-    icon: "🌿",
-    challenges: [
-      "Photo the oldest-looking tree you can see.",
-      "Find something growing where it shouldn't and capture it.",
-      "Sit still for 60 seconds. Photo whatever catches your eye.",
-      "Photograph the most peaceful view you can find here.",
-    ],
-  },
-  neon: {
-    tags: ['cafe', 'bar', 'pub', 'nightclub', 'restaurant', 'shop', 'bookshop', 'music', 'vinyl', 'tattoo', 'art_gallery', 'gallery', 'theatre', 'cinema', 'bakery', 'deli', 'charity_shop', 'antiques', 'vintage', 'second_hand', 'florist', 'hairdresser', 'barber'],
-    icon: "💡",
-    challenges: [
-      "Photo the shopfront or signage from across the street.",
-      "Find the quirkiest detail in the window display.",
-      "Capture what makes this place different from a chain.",
-      "Photo the menu, the specials board, or whatever's in the window.",
-    ],
-  },
+  industrial: { tags:['industrial','warehouse','works','factory','railway','abandoned','ruins','bunker','water_tower','silo','chimney','gasometer','crane','bridge'], icon:"🏚️", challenges:["Photo the most textured wall you can find.","Capture any rust, peeling paint, or weathered signage.","Photograph a detail nobody would normally notice.","Find something geometric and frame it."] },
+  green: { tags:['park','garden','nature_reserve','allotments','community_garden','grass','meadow','forest','tree','pond','lake','cemetery','flower_bed','dog_park'], icon:"🌿", challenges:["Photo the oldest-looking tree you can see.","Find something growing where it shouldn't.","Sit still for 60 seconds. Photo whatever catches your eye.","Photograph the most peaceful view here."] },
+  neon: { tags:['cafe','bar','pub','nightclub','restaurant','shop','bookshop','music','vinyl','tattoo','art_gallery','gallery','theatre','cinema','bakery','deli','charity_shop','antiques','vintage','second_hand','florist','hairdresser','barber'], icon:"💡", challenges:["Photo the shopfront from across the street.","Find the quirkiest detail in the window display.","Capture what makes this place different from a chain.","Photo the menu or whatever's in the window."] },
 };
 
-// Build Overpass QL query for a bounding box
-function buildOverpassQuery(south, west, north, east, vibeKey) {
-  const bbox = `${south},${west},${north},${east}`;
-  let filters = [];
+function buildOverpassQuery(s,w,n,e,v){const b=`${s},${w},${n},${e}`;let f=[];if(v==="industrial"||v==="any")f.push(`node["man_made"~"works|warehouse|chimney|water_tower|silo|gasometer|crane"](${b});`,`node["building"~"industrial|warehouse"](${b});`,`way["building"~"industrial|warehouse"](${b});`,`node["abandoned"](${b});`);if(v==="green"||v==="any")f.push(`node["leisure"~"park|garden|nature_reserve|dog_park"](${b});`,`node["landuse"~"allotments|meadow|forest|cemetery"](${b});`,`way["leisure"~"park|garden|nature_reserve"](${b});`,`node["natural"~"tree|water|pond"](${b});`);if(v==="neon"||v==="any")f.push(`node["amenity"~"cafe|bar|pub|nightclub|restaurant|theatre|cinema|arts_centre"](${b});`,`node["shop"~"books|music|tattoo|vintage|charity|antiques|second_hand|florist|bakery|deli"](${b});`,`node["tourism"="gallery"](${b});`,`node["craft"~"brewery|distillery"](${b});`);return `[out:json][timeout:10];(${f.join("")});out center 80;`;}
 
-  if (vibeKey === "industrial" || vibeKey === "any") {
-    filters.push(
-      `node["man_made"~"works|warehouse|chimney|water_tower|silo|gasometer|crane"](${bbox});`,
-      `node["building"~"industrial|warehouse"](${bbox});`,
-      `node["abandoned"](${bbox});`,
-      `way["building"~"industrial|warehouse"](${bbox});`,
-      `node["railway"="abandoned"](${bbox});`,
-    );
-  }
-  if (vibeKey === "green" || vibeKey === "any") {
-    filters.push(
-      `node["leisure"~"park|garden|nature_reserve|dog_park"](${bbox});`,
-      `node["landuse"~"allotments|meadow|forest|cemetery"](${bbox});`,
-      `way["leisure"~"park|garden|nature_reserve"](${bbox});`,
-      `node["natural"~"tree|water|pond"](${bbox});`,
-    );
-  }
-  if (vibeKey === "neon" || vibeKey === "any") {
-    filters.push(
-      `node["amenity"~"cafe|bar|pub|nightclub|restaurant|theatre|cinema|arts_centre"](${bbox});`,
-      `node["shop"~"books|music|tattoo|vintage|charity|antiques|second_hand|florist|bakery|deli"](${bbox});`,
-      `node["tourism"="gallery"](${bbox});`,
-      `node["craft"~"brewery|distillery"](${bbox});`,
-    );
-  }
+function classifyElement(el){const t=el.tags||{},av=Object.values(t).join(" ").toLowerCase(),ak=Object.keys(t).join(" ").toLowerCase();for(const[v,c]of Object.entries(OSM_VIBE_MAP)){if(c.tags.some(x=>av.includes(x)||ak.includes(x)))return v;}if(t.amenity==="cafe"||t.amenity==="restaurant"||t.amenity==="bar"||t.shop)return"neon";if(t.leisure||t.natural||t.landuse==="grass")return"green";if(t.building==="industrial"||t.man_made)return"industrial";return"neon";}
 
-  return `[out:json][timeout:10];(${filters.join("")});out center 80;`;
-}
+function pickIcon(t){if(!t)return"📍";if(t.amenity==="cafe"||t.cuisine==="coffee")return"☕";if(t.amenity==="bar"||t.amenity==="pub")return"🍺";if(t.amenity==="restaurant")return"🍽️";if(t.amenity==="theatre"||t.amenity==="cinema")return"🎭";if(t.amenity==="arts_centre"||t.tourism==="gallery")return"🎨";if(t.shop==="books")return"📚";if(t.shop==="music"||t.shop==="vinyl")return"📀";if(t.shop==="florist")return"💐";if(t.shop==="bakery")return"🥐";if(t.shop==="tattoo")return"✒️";if(t.shop==="vintage"||t.shop==="second_hand"||t.shop==="charity")return"🛍️";if(t.shop)return"🪴";if(t.leisure==="park"||t.leisure==="garden")return"🌳";if(t.leisure==="nature_reserve")return"🌲";if(t.leisure==="dog_park")return"🐕";if(t.landuse==="allotments")return"🌻";if(t.natural==="water"||t.natural==="pond")return"🦆";if(t.man_made||t.building==="industrial")return"🏚️";if(t.railway)return"🚂";return"📍";}
 
-// Categorise an OSM element into a vibe
-function classifyElement(el) {
-  const tags = el.tags || {};
-  const allVals = Object.values(tags).join(" ").toLowerCase();
-  const allKeys = Object.keys(tags).join(" ").toLowerCase();
+function osmToDiscovery(el){const t=el.tags||{},v=classifyElement(el),cfg=OSM_VIBE_MAP[v],lat=el.lat||el.center?.lat,lon=el.lon||el.center?.lon,name=t.name||t["name:en"]||t.brand||`Unnamed ${t.amenity||t.shop||t.leisure||t.man_made||"spot"}`,pts=[];if(t.amenity)pts.push(t.amenity.replace(/_/g," "));if(t.cuisine)pts.push(t.cuisine.replace(/;/g,", "));if(t.shop)pts.push(t.shop.replace(/_/g," ")+" shop");if(t.leisure)pts.push(t.leisure.replace(/_/g," "));if(t.man_made)pts.push(t.man_made.replace(/_/g," "));if(t["addr:street"])pts.push(`on ${t["addr:street"]}`);const desc=pts.length>0?pts.join(" · "):"A real place worth discovering.";return{type:t.amenity||t.shop||t.leisure||t.man_made||"place",icon:pickIcon(t),name:name.length>35?name.slice(0,33)+"…":name,desc:desc.charAt(0).toUpperCase()+desc.slice(1),vibe:v,time:`+${Math.floor(Math.random()*6)+2} min`,challenge:cfg.challenges[Math.floor(Math.random()*cfg.challenges.length)],lat,lon,osmTags:t};}
 
-  for (const [vibe, config] of Object.entries(OSM_VIBE_MAP)) {
-    if (config.tags.some(t => allVals.includes(t) || allKeys.includes(t))) return vibe;
-  }
-  // Fallback heuristics
-  if (tags.amenity === "cafe" || tags.amenity === "restaurant" || tags.amenity === "bar" || tags.shop) return "neon";
-  if (tags.leisure || tags.natural || tags.landuse === "grass") return "green";
-  if (tags.building === "industrial" || tags.man_made) return "industrial";
-  return "neon"; // default
-}
+const CHAINS=["starbucks","costa","pret","mcdonald","burger king","kfc","subway","greggs","nando","pizza hut","domino","tesco","sainsbury","asda","lidl","aldi","waitrose","boots","superdrug","poundland","primark","five guys","wagamama","caffe nero"];
+function isChain(n){return CHAINS.some(c=>(n||"").toLowerCase().includes(c));}
 
-// Pick a nice icon based on tags
-function pickIcon(tags) {
-  const t = tags || {};
-  if (t.amenity === "cafe" || t.cuisine === "coffee") return "☕";
-  if (t.amenity === "bar" || t.amenity === "pub") return "🍺";
-  if (t.amenity === "restaurant") return "🍽️";
-  if (t.amenity === "theatre" || t.amenity === "cinema") return "🎭";
-  if (t.amenity === "arts_centre" || t.tourism === "gallery") return "🎨";
-  if (t.shop === "books") return "📚";
-  if (t.shop === "music" || t.shop === "vinyl") return "📀";
-  if (t.shop === "florist") return "💐";
-  if (t.shop === "bakery") return "🥐";
-  if (t.shop === "tattoo") return "✒️";
-  if (t.shop === "vintage" || t.shop === "second_hand" || t.shop === "charity") return "🛍️";
-  if (t.shop) return "🪴";
-  if (t.leisure === "park" || t.leisure === "garden") return "🌳";
-  if (t.leisure === "nature_reserve") return "🌲";
-  if (t.leisure === "dog_park") return "🐕";
-  if (t.landuse === "allotments") return "🌻";
-  if (t.landuse === "cemetery") return "🪦";
-  if (t.natural === "water" || t.natural === "pond") return "🦆";
-  if (t.natural === "tree") return "🌲";
-  if (t.man_made || t.building === "industrial") return "🏚️";
-  if (t.railway) return "🚂";
-  if (t["abandoned"]) return "🏗️";
-  return "📍";
-}
+async function fetchRealDiscoveries(sc,ec,v,count){const pad=0.005,s=Math.min(sc.lat,ec.lat)-pad,n=Math.max(sc.lat,ec.lat)+pad,w=Math.min(sc.lng,ec.lng)-pad,e=Math.max(sc.lng,ec.lng)+pad;const q=buildOverpassQuery(s,w,n,e,v);const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:`data=${encodeURIComponent(q)}`});if(!r.ok)throw new Error(`Overpass ${r.status}`);const d=await r.json();if(!d.elements?.length)return null;let disc=d.elements.filter(x=>x.lat||x.center?.lat).map(osmToDiscovery).filter(x=>!isChain(x.name));const named=disc.filter(x=>!x.name.startsWith("Unnamed")),unnamed=disc.filter(x=>x.name.startsWith("Unnamed"));let pool=v==="any"?[...named,...unnamed]:[...named.filter(x=>x.vibe===v),...unnamed.filter(x=>x.vibe===v),...named,...unnamed];const seen=new Set();pool=pool.filter(x=>{if(seen.has(x.name))return false;seen.add(x.name);return true;});return seededShuffle(pool,Date.now()%10000).slice(0,count);}
 
-// Build a discovery object from an OSM element
-function osmToDiscovery(el) {
-  const tags = el.tags || {};
-  const vibe = classifyElement(el);
-  const config = OSM_VIBE_MAP[vibe];
-  const lat = el.lat || el.center?.lat;
-  const lon = el.lon || el.center?.lon;
+async function enhanceWithAI(discoveries){const toE=discoveries.filter(d=>d.name&&!d.name.startsWith("Unnamed"));if(!toE.length)return discoveries;const prompt=toE.map((d,i)=>`${i+1}. "${d.name}" — ${d.type}. ${d.desc}. Vibe: ${d.vibe}.`).join("\n");try{const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`You write for Unroute, a scavenger-hunt app for urban explorers. Your voice: a well-traveled friend scribbling notes in a Moleskine. Witty, specific, never generic.\n\nReturn ONLY a JSON array. No markdown. Each: {"desc":"1 quirky sentence","challenge":"1 sentence photo task requiring presence"}\n\nNever say "hidden gem", "capture the essence", "explore", or "discover". Under 15 words each.`,messages:[{role:"user",content:`Write for these ${toE.length} real places:\n${prompt}`}]})});const d=await r.json(),txt=d.content?.map(c=>c.text||"").join("")||"",enhanced=JSON.parse(txt.replace(/```json|```/g,"").trim());return discoveries.map(x=>{const i=toE.findIndex(t=>t.name===x.name);if(i>=0&&enhanced[i])return{...x,desc:enhanced[i].desc||x.desc,challenge:enhanced[i].challenge||x.challenge,aiEnhanced:true};return x;});}catch(e){console.warn("AI failed:",e.message);return discoveries;}}
 
-  // Build a name
-  const name = tags.name || tags["name:en"] || tags.brand || `Unnamed ${tags.amenity || tags.shop || tags.leisure || tags.man_made || "spot"}`;
+async function generateRouteAsync(level,vibeKey,sC,dC){const count=Math.max(2,Math.min(level,8)),names=ROUTE_NAMES[vibeKey]||ROUTE_NAMES.any,name=names[Math.floor(Math.random()*names.length)];let picks=null,isReal=false,isPioneer=false;if(sC&&dC){try{picks=await fetchRealDiscoveries(sC,dC,vibeKey,count);if(picks?.length>=2){isReal=true;picks=await enhanceWithAI(picks);}else{isPioneer=true;picks=[];}}catch(e){console.warn("Overpass:",e.message);isPioneer=true;picks=[];}}else{isPioneer=true;picks=[];}const extraMin=picks.length?picks.reduce((s,d)=>s+parseInt(d.time),0):0;let baseDist,routeDist;if(sC&&dC){const R=6371,dLat=(dC.lat-sC.lat)*Math.PI/180,dLon=(dC.lng-sC.lng)*Math.PI/180,a=Math.sin(dLat/2)**2+Math.cos(sC.lat*Math.PI/180)*Math.cos(dC.lat*Math.PI/180)*Math.sin(dLon/2)**2;baseDist=Math.max(0.3,R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*1.3).toFixed(1);routeDist=picks.length?(parseFloat(baseDist)*(1+level*0.12)).toFixed(1):baseDist;}else{baseDist="?";routeDist="?";}return{picks,extraMin,baseDist,routeDist,name,vibeKey,isReal,isPioneer};}
 
-  // Build a description from available tags
-  const parts = [];
-  if (tags.amenity) parts.push(tags.amenity.replace(/_/g, " "));
-  if (tags.cuisine) parts.push(tags.cuisine.replace(/;/g, ", "));
-  if (tags.shop) parts.push(tags.shop.replace(/_/g, " ") + " shop");
-  if (tags.leisure) parts.push(tags.leisure.replace(/_/g, " "));
-  if (tags.man_made) parts.push(tags.man_made.replace(/_/g, " "));
-  if (tags.building && tags.building !== "yes") parts.push(tags.building.replace(/_/g, " ") + " building");
-  if (tags["addr:street"]) parts.push(`on ${tags["addr:street"]}`);
-  if (tags.opening_hours) parts.push(`hours: ${tags.opening_hours.slice(0, 30)}`);
+// ─── GEOLOCATION ───
+function useGeolocation(){const[loc,setLoc]=useState({status:"idle",coords:null,address:null});useEffect(()=>{if(!navigator.geolocation){setLoc(p=>({...p,status:"unsupported"}));return;}setLoc(p=>({...p,status:"requesting"}));navigator.geolocation.getCurrentPosition(async(pos)=>{const c={lat:pos.coords.latitude,lng:pos.coords.longitude};setLoc(p=>({...p,status:"located",coords:c}));try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${c.lat}&lon=${c.lng}&format=json&zoom=16&addressdetails=1`,{headers:{"Accept-Language":"en"}});const d=await r.json(),a=d.address||{};setLoc(p=>({...p,address:a.road?`${a.road}${a.suburb?", "+a.suburb:""}${a.city||a.town?", "+(a.city||a.town):""}`:d.display_name?.split(",").slice(0,3).join(",")||"Your location"}));}catch{setLoc(p=>({...p,address:`${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`}));}},()=>setLoc(p=>({...p,status:"denied"})),{enableHighAccuracy:true,timeout:10000,maximumAge:60000});},[]);return loc;}
 
-  const desc = parts.length > 0 ? parts.join(" · ") : "A real place worth discovering.";
+// ─── ANTI-CLOUD ───
+const antiCloud={_s:{},save(k,v){this._s[k]=JSON.stringify(v);},load(k){try{return JSON.parse(this._s[k]);}catch{return null;}},get routeCount(){return this.load("rc")||0;},get totalDiscoveries(){return this.load("td")||0;},get proofCount(){return this.load("pc")||0;},get completedRoutes(){return this.load("cr")||[];},logRoute(r){this.save("rc",this.routeCount+1);this.save("td",this.totalDiscoveries+r.picks.length);const c=this.completedRoutes;c.push({name:r.name,vibe:r.vibeKey,discoveries:r.picks.length,date:new Date().toLocaleDateString()});this.save("cr",c.slice(-20));},logProof(){this.save("pc",this.proofCount+1);}};
 
-  // Estimate time detour based on nothing scientific
-  const timeMin = Math.floor(Math.random() * 6) + 2;
+// ─── TOAST ───
+function Toast({message,type,onDismiss}){useEffect(()=>{const t=setTimeout(onDismiss,4000);return()=>clearTimeout(t);},[onDismiss]);const colors={error:{bg:"rgba(200,67,43,0.08)",border:T.accent,color:T.accent},success:{bg:T.tealSoft,border:T.teal,color:T.teal},warning:{bg:T.goldSoft,border:T.gold,color:T.gold}};const c=colors[type]||colors.warning;return(<div onClick={onDismiss} style={{position:"fixed",top:16,left:16,right:16,zIndex:999,padding:"14px 18px",background:c.bg,border:`1px solid ${c.border}`,borderRadius:4,fontFamily:"'Courier Prime',monospace",fontSize:13,color:c.color,animation:"fadeIn 0.3s ease",backdropFilter:"blur(8px)",boxShadow:`0 2px 12px ${T.shadow}`}}>{message}</div>);}
 
-  return {
-    type: tags.amenity || tags.shop || tags.leisure || tags.man_made || "place",
-    icon: pickIcon(tags),
-    name: name.length > 35 ? name.slice(0, 33) + "…" : name,
-    desc: desc.charAt(0).toUpperCase() + desc.slice(1),
-    vibe,
-    time: `+${timeMin} min`,
-    challenge: config.challenges[Math.floor(Math.random() * config.challenges.length)],
-    lat,
-    lon,
-    osmTags: tags,
-  };
-}
-
-// Known chains to filter out (the Anti-Algorithm rejects the optimised)
-const CHAIN_NAMES = [
-  "starbucks", "costa", "pret", "mcdonald", "burger king", "kfc", "subway",
-  "greggs", "nando", "pizza hut", "domino", "papa john", "tesco", "sainsbury",
-  "asda", "lidl", "aldi", "waitrose", "co-op", "spar", "one stop",
-  "boots", "superdrug", "wh smith", "poundland", "primark", "h&m",
-  "zara", "uniqlo", "nike", "adidas", "five guys", "wagamama", "itsu",
-  "leon", "eat", "caffe nero", "tim horton", "dunkin",
-];
-
-function isChain(name) {
-  const lower = (name || "").toLowerCase();
-  return CHAIN_NAMES.some(c => lower.includes(c));
-}
-
-// Fetch real discoveries from Overpass API
-async function fetchRealDiscoveries(startCoords, endCoords, vibeKey, count) {
-  // Build bounding box with padding
-  const pad = 0.005; // ~500m padding
-  const south = Math.min(startCoords.lat, endCoords.lat) - pad;
-  const north = Math.max(startCoords.lat, endCoords.lat) + pad;
-  const west = Math.min(startCoords.lng, endCoords.lng) - pad;
-  const east = Math.max(startCoords.lng, endCoords.lng) + pad;
-
-  const query = buildOverpassQuery(south, west, north, east, vibeKey);
-
-  const res = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-  });
-
-  if (!res.ok) throw new Error(`Overpass returned ${res.status}`);
-  const data = await res.json();
-
-  if (!data.elements || data.elements.length === 0) return null;
-
-  // Convert to discoveries, filter chains, prefer named places
-  let discoveries = data.elements
-    .filter(el => (el.lat || el.center?.lat))
-    .map(osmToDiscovery)
-    .filter(d => !isChain(d.name)); // ← Chain filter
-
-  // Prefer named places, then unnamed
-  const named = discoveries.filter(d => !d.name.startsWith("Unnamed"));
-  const unnamed = discoveries.filter(d => d.name.startsWith("Unnamed"));
-
-  // Filter by vibe if not "any"
-  let pool = vibeKey === "any"
-    ? [...named, ...unnamed]
-    : [...named.filter(d => d.vibe === vibeKey), ...unnamed.filter(d => d.vibe === vibeKey), ...named, ...unnamed];
-
-  // Deduplicate by name
-  const seen = new Set();
-  pool = pool.filter(d => {
-    if (seen.has(d.name)) return false;
-    seen.add(d.name);
-    return true;
-  });
-
-  // Shuffle and take what we need
-  const seed = Date.now() % 10000;
-  return seededShuffle(pool, seed).slice(0, count);
-}
-
-// ─── AI VIBE ENGINE (Claude via Anthropic API) ───
-async function enhanceWithAI(discoveries) {
-  const toEnhance = discoveries.filter(d => d.name && !d.name.startsWith("Unnamed"));
-  if (toEnhance.length === 0) return discoveries;
-
-  const prompt = toEnhance.map((d, i) =>
-    `${i + 1}. "${d.name}" — Type: ${d.type}. Tags: ${d.desc}. Vibe: ${d.vibe}.`
-  ).join("\n");
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        system: `You write for Unroute, an app that helps people get beautifully lost in cities. You sound like a friend who knows every hidden corner — witty, specific, never generic.
-
-Return ONLY a JSON array. No markdown, no backticks, no preamble. Each element: {"desc": "1 quirky sentence describing the place", "challenge": "1 sentence photo challenge requiring physical presence"}
-
-Rules:
-- Be specific to the place name and type. Reference what makes it unique.
-- Never say "capture the essence", "hidden gem", "explore", or "discover".
-- Challenges must require being physically present (photo a specific feature, not just "take a photo").
-- Keep it under 15 words each.`,
-        messages: [{ role: "user", content: `Write for these ${toEnhance.length} real places:\n${prompt}` }],
-      }),
-    });
-
-    const data = await res.json();
-    const text = data.content?.map(c => c.text || "").join("") || "";
-    const clean = text.replace(/```json|```/g, "").trim();
-    const enhanced = JSON.parse(clean);
-
-    return discoveries.map(d => {
-      const idx = toEnhance.findIndex(t => t.name === d.name);
-      if (idx >= 0 && enhanced[idx]) {
-        return { ...d, desc: enhanced[idx].desc || d.desc, challenge: enhanced[idx].challenge || d.challenge, aiEnhanced: true };
-      }
-      return d;
-    });
-  } catch (err) {
-    console.warn("AI enhancement failed, using raw OSM data:", err.message);
-    return discoveries;
-  }
-}
-
-// Async route generation: Overpass → Chain filter → AI enhance → Pioneer Mode
-async function generateRouteAsync(level, vibeKey, sCoords, dCoords) {
-  const count = Math.max(2, Math.min(level, 8));
-  const names = ROUTE_NAMES[vibeKey] || ROUTE_NAMES.any;
-  const name = names[Math.floor(Math.random() * names.length)];
-
-  let picks = null;
-  let isReal = false;
-  let isPioneer = false;
-
-  if (sCoords && dCoords) {
-    try {
-      picks = await fetchRealDiscoveries(sCoords, dCoords, vibeKey, count);
-      if (picks && picks.length >= 2) {
-        isReal = true;
-        // AI Vibe Engine: enhance descriptions and challenges
-        picks = await enhanceWithAI(picks);
-      } else {
-        // Pioneer Mode: area has no mapped gems
-        isPioneer = true;
-        picks = [];
-      }
-    } catch (err) {
-      console.warn("Overpass failed:", err.message);
-      isPioneer = true;
-      picks = [];
-    }
-  } else {
-    // No coordinates available — can't search
-    isPioneer = true;
-    picks = [];
-  }
-
-  const extraMin = picks.length > 0 ? picks.reduce((s, d) => s + parseInt(d.time), 0) : 0;
-
-  let baseDist, routeDist;
-  if (sCoords && dCoords) {
-    const R = 6371;
-    const dLat = (dCoords.lat - sCoords.lat) * Math.PI / 180;
-    const dLon = (dCoords.lng - sCoords.lng) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(sCoords.lat * Math.PI / 180) * Math.cos(dCoords.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-    const straight = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    baseDist = Math.max(0.3, straight * 1.3).toFixed(1);
-    routeDist = picks.length > 0 ? (parseFloat(baseDist) * (1 + level * 0.12)).toFixed(1) : baseDist;
-  } else {
-    baseDist = "?";
-    routeDist = "?";
-  }
-
-  return { picks, extraMin, baseDist, routeDist, name, vibeKey, isReal, isPioneer };
-}
-
-// ─── GEOLOCATION HOOK ───
-function useGeolocation() {
-  const [location, setLocation] = useState({ status: "idle", coords: null, address: null, error: null });
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setLocation(prev => ({ ...prev, status: "unsupported", error: "Geolocation not supported" }));
-      return;
-    }
-    setLocation(prev => ({ ...prev, status: "requesting" }));
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setLocation(prev => ({ ...prev, status: "located", coords }));
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${coords.lat}&lon=${coords.lng}&format=json&zoom=16&addressdetails=1`,
-            { headers: { "Accept-Language": "en" } }
-          );
-          const data = await res.json();
-          const addr = data.address || {};
-          const short = addr.road
-            ? `${addr.road}${addr.suburb ? ", " + addr.suburb : ""}${addr.city || addr.town ? ", " + (addr.city || addr.town) : ""}`
-            : data.display_name?.split(",").slice(0, 3).join(",") || "Your location";
-          setLocation(prev => ({ ...prev, address: short }));
-        } catch {
-          setLocation(prev => ({ ...prev, address: `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` }));
-        }
-      },
-      (err) => setLocation(prev => ({ ...prev, status: "denied", error: err.message })),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
-  }, []);
-  return location;
-}
-
-// ─── ANTI-CLOUD STORAGE (device-only, in-memory for artifact sandbox) ───
-const antiCloud = {
-  _store: {},
-  save(key, val) { this._store[key] = JSON.stringify(val); },
-  load(key) { try { return JSON.parse(this._store[key]); } catch { return null; } },
-  clear() { this._store = {}; },
-  get routeCount() { return this.load("routes_completed") || 0; },
-  get totalDiscoveries() { return this.load("total_discoveries") || 0; },
-  get proofCount() { return this.load("proofs_submitted") || 0; },
-  get completedRoutes() { return this.load("completed_routes") || []; },
-  logRoute(route) {
-    this.save("routes_completed", this.routeCount + 1);
-    this.save("total_discoveries", this.totalDiscoveries + route.picks.length);
-    const completed = this.completedRoutes;
-    completed.push({ name: route.name, vibe: route.vibeKey, discoveries: route.picks.length, date: new Date().toLocaleDateString() });
-    this.save("completed_routes", completed.slice(-20)); // keep last 20
-  },
-  logProof() { this.save("proofs_submitted", this.proofCount + 1); },
-};
-
-// ─── PLACE AUTOCOMPLETE (Nominatim forward geocoding + postcode support) ───
-function PlaceAutocomplete({ value, onChange, onSelect, placeholder, accentColor, fontFamily, resolvedPlace }) {
-  const [suggestions, setSuggestions] = useState([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const debounceRef = useRef(null);
-  const wrapperRef = useRef(null);
-  const color = accentColor || "#4ECDC4";
-  const font = fontFamily || "'DM Mono', monospace";
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setIsOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  // Detect if input looks like a UK postcode
-  const isPostcode = (q) => /^[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d?[A-Za-z]{0,2}$/i.test(q.trim());
-
-  const search = useCallback((q) => {
-    if (!q || q.length < 2) { setSuggestions([]); setIsOpen(false); return; }
-
-    // Lower the threshold for postcodes (they can be short like "E1" or "SE1")
-    if (!isPostcode(q) && q.length < 3) { setSuggestions([]); setIsOpen(false); return; }
-
-    setLoading(true);
-
-    // Add countrycodes=gb for postcodes to get better UK results
-    const params = isPostcode(q)
-      ? `postalcode=${encodeURIComponent(q.trim())}&countrycodes=gb&format=json&addressdetails=1&limit=5`
-      : `q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5`;
-
-    fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-      headers: { "Accept-Language": "en" }
-    })
-      .then(r => r.json())
-      .then(data => {
-        const results = data.map(d => {
-          const addr = d.address || {};
-          const parts = [
-            addr.road,
-            addr.suburb || addr.neighbourhood || addr.hamlet,
-            addr.city || addr.town || addr.village,
-            addr.county,
-            addr.postcode,
-          ].filter(Boolean);
-          return {
-            display: parts.length > 0 ? parts.join(", ") : d.display_name.split(",").slice(0, 3).join(",").trim(),
-            full: d.display_name,
-            lat: parseFloat(d.lat),
-            lng: parseFloat(d.lon),
-            type: d.type,
-            postcode: addr.postcode || null,
-          };
-        });
-        setSuggestions(results);
-        setIsOpen(results.length > 0);
-        setLoading(false);
-      })
-      .catch(() => { setLoading(false); });
-  }, []);
-
-  const handleChange = (e) => {
-    const v = e.target.value;
-    onChange(v);
-    // Clear resolved state when user edits
-    if (resolvedPlace) onSelect(null);
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => search(v), 350);
-  };
-
-  const handleSelect = (s) => {
-    onChange(s.display);
-    onSelect(s);
-    setIsOpen(false);
-    setSuggestions([]);
-  };
-
-  return (
-    <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
-      <div style={{ position: "relative" }}>
-        <input
-          type="text" value={value} onChange={handleChange}
-          placeholder={placeholder}
-          onFocus={() => { if (suggestions.length > 0) setIsOpen(true); }}
-          style={{
-            width: "100%", padding: "12px 16px", paddingRight: 36, fontSize: 14,
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${resolvedPlace ? `${color}50` : `${color}30`}`,
-            borderRadius: isOpen ? "12px 12px 0 0" : 12, color: "#fff", outline: "none",
-            fontFamily: font, transition: "border-color 0.3s, border-radius 0.2s",
-          }}
-        />
-        <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-          {loading ? <span style={{ animation: "pulse 1s ease-in-out infinite" }}>⏳</span>
-            : resolvedPlace ? <span style={{ color }}>✓</span>
-            : null}
+// ─── PLACE AUTOCOMPLETE ───
+function PlaceAutocomplete({value,onChange,onSelect,placeholder,accentColor,resolvedPlace}){
+  const[suggestions,setSuggestions]=useState([]);const[isOpen,setIsOpen]=useState(false);const[loading,setLoading]=useState(false);const debRef=useRef(null);const wrapRef=useRef(null);const clr=accentColor||T.teal;
+  useEffect(()=>{const h=(e)=>{if(wrapRef.current&&!wrapRef.current.contains(e.target))setIsOpen(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
+  const isPC=(q)=>/^[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d?[A-Za-z]{0,2}$/i.test(q.trim());
+  const search=useCallback((q)=>{if(!q||q.length<2){setSuggestions([]);setIsOpen(false);return;}if(!isPC(q)&&q.length<3)return;setLoading(true);const params=isPC(q)?`postalcode=${encodeURIComponent(q.trim())}&countrycodes=gb&format=json&addressdetails=1&limit=5`:`q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5`;fetch(`https://nominatim.openstreetmap.org/search?${params}`,{headers:{"Accept-Language":"en"}}).then(r=>r.json()).then(data=>{setSuggestions(data.map(d=>{const a=d.address||{},pts=[a.road,a.suburb||a.neighbourhood||a.hamlet,a.city||a.town||a.village,a.postcode].filter(Boolean);return{display:pts.length?pts.join(", "):d.display_name.split(",").slice(0,3).join(",").trim(),full:d.display_name,lat:parseFloat(d.lat),lng:parseFloat(d.lon)};}));setIsOpen(data.length>0);setLoading(false);}).catch(()=>setLoading(false));},[]);
+  return(
+    <div ref={wrapRef} style={{position:"relative"}}>
+      <div style={{position:"relative"}}>
+        <input type="text" value={value} onChange={(e)=>{onChange(e.target.value);if(resolvedPlace)onSelect(null);clearTimeout(debRef.current);debRef.current=setTimeout(()=>search(e.target.value),350);}} placeholder={placeholder} onFocus={()=>{if(suggestions.length)setIsOpen(true);}}
+          style={{width:"100%",padding:"14px 40px 14px 16px",fontSize:16,background:T.paper,border:`2px solid ${resolvedPlace?clr:T.inkGhost}`,borderRadius:"255px 15px 225px 15px / 15px 225px 15px 255px",color:T.ink,outline:"none",fontFamily:"'Courier Prime',monospace",transition:"border-color 0.3s",minHeight:50,boxShadow:`1px 2px 0px ${T.inkGhost}`,transform:"rotate(-0.3deg)"}} />
+        <span style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",fontSize:14}}>
+          {loading?<span style={{color:T.inkFaint,animation:"pulse 1s infinite"}}>◌</span>:resolvedPlace?<span style={{color:clr,fontWeight:700}}>✓</span>:null}
         </span>
       </div>
-
-      {/* Confirmation badge — shows when a location is resolved */}
-      {resolvedPlace && !isOpen && (
-        <div style={{
-          marginTop: 6, padding: "6px 10px", borderRadius: 8,
-          background: `${color}08`, border: `1px solid ${color}18`,
-          display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
-          animation: "fadeSlideIn 0.3s ease",
-        }}>
-          <span style={{ fontSize: 11, color }}>✓ Resolved</span>
-          <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.5)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {resolvedPlace.full || resolvedPlace.display}
-          </span>
-          <span style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.25)", flexShrink: 0 }}>
-            {resolvedPlace.lat.toFixed(5)}, {resolvedPlace.lng.toFixed(5)}
-          </span>
+      {resolvedPlace&&!isOpen&&(
+        <div style={{marginTop:6,padding:"8px 12px",background:T.tealSoft,border:`1px dashed ${T.teal}`,borderRadius:2,fontFamily:"'Courier Prime',monospace",fontSize:11,color:T.teal,display:"flex",gap:8,flexWrap:"wrap",animation:"fadeIn 0.3s ease"}}>
+          <span style={{fontWeight:700}}>✓ RESOLVED</span>
+          <span style={{color:T.inkLight,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resolvedPlace.full||resolvedPlace.display}</span>
+          <span style={{color:T.inkFaint,flexShrink:0}}>{resolvedPlace.lat.toFixed(5)}, {resolvedPlace.lng.toFixed(5)}</span>
         </div>
       )}
-
-      {/* Dropdown suggestions */}
-      {isOpen && suggestions.length > 0 && (
-        <div style={{
-          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
-          background: "#12121f", border: `1px solid ${color}30`, borderTop: "none",
-          borderRadius: "0 0 12px 12px", overflow: "hidden",
-          boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
-        }}>
-          {suggestions.map((s, i) => (
-            <button key={i} onClick={() => handleSelect(s)} style={{
-              display: "flex", alignItems: "flex-start", gap: 8, width: "100%", padding: "10px 14px",
-              background: "transparent", border: "none", borderTop: i > 0 ? "1px solid rgba(255,255,255,0.04)" : "none",
-              cursor: "pointer", textAlign: "left", transition: "background 0.15s",
-              color: "#fff",
-            }}
-              onMouseEnter={e => e.currentTarget.style.background = `${color}10`}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              <span style={{ fontSize: 13, color: `${color}88`, flexShrink: 0, marginTop: 1 }}>📍</span>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 13, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {s.display}
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 2 }}>
-                  {s.full !== s.display && (
-                    <div style={{ fontSize: 10, fontFamily: font, color: "rgba(255,255,255,0.2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                      {s.full}
-                    </div>
-                  )}
-                  <div style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.15)", flexShrink: 0 }}>
-                    {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
-                  </div>
-                </div>
+      {isOpen&&suggestions.length>0&&(
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:50,background:T.paper,border:`1.5px solid ${T.inkGhost}`,borderTop:"none",borderRadius:"0 0 3px 3px",boxShadow:`0 8px 24px ${T.shadow}`}}>
+          {suggestions.map((s,i)=>(
+            <button key={i} onClick={()=>{onChange(s.display);onSelect(s);setIsOpen(false);setSuggestions([]);}} style={{display:"flex",alignItems:"flex-start",gap:10,width:"100%",padding:"14px 16px",background:"transparent",border:"none",borderTop:i?`1px solid ${T.inkGhost}`:"none",cursor:"pointer",textAlign:"left",color:T.ink,fontFamily:"'Courier Prime',monospace",minHeight:48}} onMouseEnter={e=>e.currentTarget.style.background=T.tealSoft} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <span style={{color:T.inkFaint,flexShrink:0}}>↳</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.display}</div>
+                <div style={{fontSize:10,color:T.inkFaint,marginTop:2}}>{s.lat.toFixed(4)}, {s.lng.toFixed(4)}</div>
               </div>
             </button>
           ))}
@@ -568,735 +118,376 @@ function PlaceAutocomplete({ value, onChange, onSelect, placeholder, accentColor
 }
 
 // ─── COMPONENTS ───
+function Stamp({children,color}){return <span style={{display:"inline-block",padding:"3px 10px",border:`2px solid ${color||T.accent}`,borderRadius:2,fontSize:10,fontFamily:"'Courier Prime',monospace",fontWeight:700,letterSpacing:1.5,color:color||T.accent,textTransform:"uppercase",transform:"rotate(-1deg)"}}>{children}</span>;}
 
-function LocationBadge({ geo }) {
-  const styles = {
-    base: {
-      display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px",
-      borderRadius: 20, fontSize: 11, fontFamily: "'DM Mono', monospace",
-    }
-  };
-  if (geo.status === "idle" || geo.status === "requesting") {
-    return (
-      <div style={{ ...styles.base, background: "rgba(78,205,196,0.06)", border: "1px solid rgba(78,205,196,0.15)", color: "rgba(255,255,255,0.4)" }}>
-        <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#4ECDC4", animation: "pulse 1.2s ease-in-out infinite" }} />
-        Locating you…
+function DiscoveryCard({discovery,index,isActive,onClick,isLocked,proofImage,onProofVerified}){
+  const clr=VIBE_COLORS[discovery.vibe]||T.teal;
+  const mapsUrl=discovery.lat&&discovery.lon?`https://www.google.com/maps/dir/?api=1&destination=${discovery.lat},${discovery.lon}&travelmode=walking`:null;
+  if(isLocked)return(
+    <div style={{padding:"18px 20px",background:`repeating-linear-gradient(45deg,transparent,transparent 10px,${T.inkGhost}22 10px,${T.inkGhost}22 11px)`,border:`1px dashed ${T.inkGhost}`,borderRadius:3,animation:`fadeIn 0.4s ease ${index*0.08}s both`,opacity:0.5}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <span style={{fontSize:22,opacity:0.3}}>🔒</span>
+        <div><span style={{fontSize:14,fontWeight:700,color:T.inkFaint,fontFamily:"'Playfair Display',serif"}}>Stop #{index+1}</span><p style={{margin:"2px 0 0",fontSize:12,color:T.inkFaint,fontFamily:"'Courier Prime',monospace",fontStyle:"italic"}}>Complete the previous challenge to reveal</p></div>
       </div>
-    );
-  }
-  if (geo.status === "located") {
-    return (
-      <div style={{ ...styles.base, background: "rgba(78,205,196,0.06)", border: "1px solid rgba(78,205,196,0.15)", color: "rgba(255,255,255,0.5)", animation: "fadeSlideIn 0.4s ease" }}>
-        <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#4ECDC4" }} />
-        {geo.address || "Located"}
+    </div>);
+  return(
+    <div style={{padding:"20px",background:T.paper,border:`1.5px solid ${isActive?clr:T.inkGhost}`,borderRadius:2,borderLeft:`4px solid ${clr}`,transition:"all 0.3s ease",animation:`fadeIn 0.4s ease ${index*0.08}s both`,boxShadow:isActive?`2px 3px 12px ${T.shadow}, inset 0 0 20px rgba(139,105,20,0.02)`:`1px 1px 4px ${T.shadow}`,transform:`rotate(${(index%2===0?-0.3:0.2)}deg)`}}>
+      <div onClick={onClick} style={{cursor:"pointer"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:14}}>
+          <span style={{fontSize:28,lineHeight:1}}>{discovery.icon}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+              <span style={{fontSize:19,fontWeight:700,color:T.ink,fontFamily:"'Caveat',cursive"}}>{discovery.name}</span>
+              <span style={{fontSize:11,fontFamily:"'Courier Prime',monospace",color:clr,whiteSpace:"nowrap",fontWeight:700}}>{discovery.time}</span>
+            </div>
+            <p style={{margin:"6px 0 0",fontSize:13,color:T.inkLight,lineHeight:1.6,fontFamily:"'Courier Prime',monospace"}}>{discovery.desc}</p>
+            {discovery.aiEnhanced&&<span style={{fontSize:10,color:T.gold,fontFamily:"'Courier Prime',monospace"}}>✦ ai-written</span>}
+          </div>
+        </div>
       </div>
-    );
-  }
-  return (
-    <div style={{ ...styles.base, background: "rgba(255,107,53,0.06)", border: "1px solid rgba(255,107,53,0.15)", color: "rgba(255,255,255,0.4)" }}>
-      <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#FF6B35" }} />
-      Location unavailable
-    </div>
-  );
-}
-
-function VibeSelector({ selected, onChange }) {
-  return (
-    <div>
-      <label style={{ display: "block", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.4)", letterSpacing: 1.5, marginBottom: 10 }}>
-        FLAVOUR OF LOST
-      </label>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        {Object.entries(VIBE_ROUTES).map(([key, v]) => {
-          const isActive = selected === key;
-          return (
-            <button key={key} onClick={() => onChange(key)} style={{
-              padding: "12px 14px", borderRadius: 12, border: `1px solid ${isActive ? v.color : "rgba(255,255,255,0.06)"}`,
-              background: isActive ? `${v.color}12` : "rgba(255,255,255,0.02)",
-              cursor: "pointer", textAlign: "left", transition: "all 0.25s ease",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 18 }}>{v.icon}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? v.color : "rgba(255,255,255,0.7)", fontFamily: "'Space Grotesk', sans-serif" }}>
-                  {v.label}
-                </span>
+      {isActive&&(
+        <div style={{marginTop:14,paddingTop:14,borderTop:`1px dashed ${T.inkGhost}`}}>
+          {!proofImage?(
+            <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+              <span style={{fontSize:18}}>📸</span>
+              <div style={{flex:1}}>
+                <p style={{fontSize:12,fontFamily:"'Courier Prime',monospace",color:T.accent,margin:"0 0 10px",lineHeight:1.5,fontStyle:"italic"}}>{discovery.challenge}</p>
+                <input ref={el=>{if(el)el._fileRef=el;}} type="file" accept="image/*" capture="environment" onChange={(e)=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=(ev)=>{antiCloud.logProof();onProofVerified(ev.target.result);};r.readAsDataURL(f);}} style={{display:"none"}} id={`proof-${index}`} />
+                <label htmlFor={`proof-${index}`} style={{display:"inline-block",padding:"12px 18px",fontSize:12,fontWeight:700,fontFamily:"'Courier Prime',monospace",background:T.accentSoft,color:T.accent,border:`1.5px solid ${T.accent}`,borderRadius:3,cursor:"pointer",minHeight:44,lineHeight:"20px"}}>
+                  📷 TAKE PHOTO TO UNLOCK
+                </label>
               </div>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", margin: 0, lineHeight: 1.3 }}>
-                {v.desc}
-              </p>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function DiscoverySlider({ value, onChange }) {
-  const labels = ["", "Slight detour", "A little lost", "Curious", "Wandering", "Exploring", "Adventurous", "Deep drift", "Off the grid", "Into the unknown", "Maximum serendipity"];
-  return (
-    <div style={{ width: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", fontFamily: "'DM Mono', monospace", letterSpacing: 1 }}>DISCOVERY LEVEL</span>
-        <span style={{ fontSize: 32, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: value <= 3 ? "#4ECDC4" : value <= 6 ? "#FFD700" : "#FF6B35", lineHeight: 1 }}>{value}</span>
-      </div>
-      <input type="range" min="1" max="10" value={value} onChange={e => onChange(parseInt(e.target.value))}
-        style={{ width: "100%", height: 6, appearance: "none", background: "linear-gradient(90deg, #4ECDC4, #FFD700, #FF6B35)", borderRadius: 3, outline: "none", cursor: "pointer" }} />
-      <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.35)", fontFamily: "'DM Mono', monospace", textAlign: "center" }}>{labels[value]}</div>
-    </div>
-  );
-}
-
-function ProofOfPresence({ discovery, onVerified, proofImage }) {
-  const fileRef = useRef(null);
-  const [preview, setPreview] = useState(proofImage || null);
-  const [verified, setVerified] = useState(!!proofImage);
-
-  const handleCapture = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setPreview(ev.target.result);
-      setVerified(true);
-      antiCloud.logProof();
-      onVerified(ev.target.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  if (verified && preview) {
-    return (
-      <div style={{ marginTop: 10, padding: 10, background: "rgba(78,205,196,0.06)", borderRadius: 10, border: "1px solid rgba(78,205,196,0.15)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 14 }}>✅</span>
-          <span style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "#4ECDC4", fontWeight: 500 }}>PRESENCE VERIFIED</span>
-        </div>
-        <img src={preview} alt="Proof" style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 8, opacity: 0.85 }} />
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ marginTop: 10, padding: 12, background: "rgba(255,215,0,0.04)", borderRadius: 10, border: "1px dashed rgba(255,215,0,0.25)" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        <span style={{ fontSize: 16 }}>📸</span>
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "#FFD700", margin: "0 0 8px", lineHeight: 1.4 }}>
-            {discovery.challenge}
-          </p>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleCapture} style={{ display: "none" }} />
-          <button onClick={() => fileRef.current?.click()} style={{
-            padding: "8px 14px", fontSize: 11, fontWeight: 600, fontFamily: "'DM Mono', monospace",
-            background: "rgba(255,215,0,0.1)", color: "#FFD700", border: "1px solid rgba(255,215,0,0.25)",
-            borderRadius: 8, cursor: "pointer", transition: "all 0.2s",
-          }}>
-            📷 Take Photo to Unlock
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DiscoveryCard({ discovery, index, isActive, onClick, isLocked, isUnlocked, proofImage, onProofVerified }) {
-  const color = VIBE_COLORS[discovery.vibe] || "#4ECDC4";
-
-  if (isLocked) {
-    return (
-      <div style={{
-        padding: "14px 16px", background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)",
-        borderRadius: 12, animation: `fadeSlideIn 0.4s ease ${index * 0.08}s both`,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 24, opacity: 0.2 }}>🔒</span>
-          <div>
-            <span style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.15)", fontFamily: "'Space Grotesk', sans-serif" }}>
-              Discovery #{index + 1}
-            </span>
-            <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,255,255,0.1)", fontFamily: "'DM Mono', monospace" }}>
-              Complete the previous challenge to reveal
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{
-      padding: "14px 16px",
-      background: isActive ? `${color}12` : "rgba(255,255,255,0.02)",
-      border: `1px solid ${isActive ? color : "rgba(255,255,255,0.06)"}`,
-      borderRadius: 12, transition: "all 0.3s ease",
-      animation: `fadeSlideIn 0.4s ease ${index * 0.08}s both`,
-    }}>
-      <div onClick={onClick} style={{ cursor: "pointer" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-          <span style={{ fontSize: 24, lineHeight: 1 }}>{discovery.icon}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#fff", fontFamily: "'Space Grotesk', sans-serif" }}>{discovery.name}</span>
-              <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color, whiteSpace: "nowrap", padding: "2px 6px", background: `${color}15`, borderRadius: 4 }}>{discovery.time}</span>
             </div>
-            <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.4, fontFamily: "'DM Mono', monospace" }}>{discovery.desc}</p>
-          </div>
+          ):(
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span>✅</span><Stamp color={T.teal}>VERIFIED</Stamp></div>
+              <img src={proofImage} alt="Proof" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:3,border:`1px solid ${T.inkGhost}`}} />
+            </div>
+          )}
+          {mapsUrl&&<a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{display:"block",marginTop:12,padding:"12px 16px",background:T.bg,border:`1px solid ${T.inkGhost}`,borderRadius:3,color:T.inkLight,fontSize:12,fontFamily:"'Courier Prime',monospace",textDecoration:"none",textAlign:"center",minHeight:44}}>🗺️ Open in Google Maps → walk there</a>}
         </div>
-      </div>
-      {isActive && (
-        <ProofOfPresence discovery={discovery} proofImage={proofImage} onVerified={onProofVerified} />
       )}
-    </div>
-  );
+    </div>);
 }
 
-function RouteMap({ discoveries, active, startLabel, vibeColor, unlockedCount }) {
-  const points = discoveries.map((_, i) => {
-    const t = i / Math.max(discoveries.length - 1, 1);
-    const x = 40 + t * 620;
-    const baseY = 200;
-    const wave = Math.sin(t * Math.PI * 2.5 + i) * 60;
-    const jitter = ((i * 137) % 50) - 25;
-    return { x, y: baseY + wave + jitter };
-  });
-
-  const start = { x: 20, y: 200 };
-  const end = { x: 690, y: 200 };
-  const allPts = [start, ...points, end];
-
-  let pathD = `M ${allPts[0].x} ${allPts[0].y}`;
-  for (let i = 1; i < allPts.length; i++) {
-    const prev = allPts[i - 1];
-    const curr = allPts[i];
-    const cpx1 = prev.x + (curr.x - prev.x) * 0.5;
-    const cpx2 = prev.x + (curr.x - prev.x) * 0.5;
-    pathD += ` C ${cpx1} ${prev.y}, ${cpx2} ${curr.y}, ${curr.x} ${curr.y}`;
-  }
-
-  const shortStart = startLabel && startLabel.length > 22 ? startLabel.slice(0, 20) + "…" : startLabel;
-  const mainColor = vibeColor || "#4ECDC4";
-
-  return (
-    <svg viewBox="0 0 710 400" style={{ width: "100%", height: "auto", display: "block" }}>
+function RouteMap({discoveries,active,startLabel,vibeColor,unlockedCount}){
+  if(!discoveries.length)return null;
+  const pts=discoveries.map((_,i)=>{const t=i/Math.max(discoveries.length-1,1);return{x:40+t*620,y:200+Math.sin(t*Math.PI*2.5+i)*60+(((i*137)%50)-25)};});
+  const st={x:20,y:200},en={x:690,y:200},all=[st,...pts,en];
+  let d=`M ${all[0].x} ${all[0].y}`;for(let i=1;i<all.length;i++){const p=all[i-1],c=all[i];d+=` C ${p.x+(c.x-p.x)*0.5} ${p.y}, ${p.x+(c.x-p.x)*0.5} ${c.y}, ${c.x} ${c.y}`;}
+  const mc=vibeColor||T.teal,sl=startLabel?.length>22?startLabel.slice(0,20)+"…":startLabel;
+  return(
+    <svg viewBox="0 0 710 400" style={{width:"100%",height:"auto",display:"block"}}>
       <defs>
-        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.5" />
-        </pattern>
-        <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-        <filter id="locGlow"><feGaussianBlur stdDeviation="5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+        <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.5" fill={T.inkGhost} /></pattern>
+        <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" result="noise" /><feColorMatrix in="noise" type="saturate" values="0" result="bnoise" /><feBlend in="SourceGraphic" in2="bnoise" mode="multiply" /></filter>
+        <radialGradient id="mapVignette" cx="50%" cy="50%" r="55%"><stop offset="0%" stopColor="transparent" /><stop offset="100%" stopColor="rgba(44,36,22,0.08)" /></radialGradient>
       </defs>
-      <rect width="710" height="400" fill="url(#grid)" />
-      {[80, 160, 240, 320].map(y => <line key={`h${y}`} x1="0" y1={y} x2="710" y2={y} stroke="rgba(255,255,255,0.02)" strokeWidth="1" />)}
-      {[100, 200, 350, 500, 600].map(x => <line key={`v${x}`} x1={x} y1="0" x2={x} y2="400" stroke="rgba(255,255,255,0.02)" strokeWidth="1" />)}
-      {/* Boring route */}
-      <line x1="20" y1="200" x2="690" y2="200" stroke="rgba(255,255,255,0.08)" strokeWidth="2" strokeDasharray="8 6" />
-      <text x="355" y="190" textAnchor="middle" fill="rgba(255,255,255,0.12)" fontSize="10" fontFamily="monospace">EFFICIENT ROUTE (BORING)</text>
-      {/* Discovery route */}
-      <path d={pathD} fill="none" stroke={`${mainColor}25`} strokeWidth="12" strokeLinecap="round" />
-      <path d={pathD} fill="none" stroke={mainColor} strokeWidth="2.5" strokeLinecap="round" strokeDasharray="1200" strokeDashoffset="0" filter="url(#glow)" style={{ animation: "drawPath 2s ease-out forwards" }} />
-      {/* Start — pulsing you-are-here */}
-      <circle cx={start.x} cy={start.y} r="20" fill={`${mainColor}15`} filter="url(#locGlow)">
-        <animate attributeName="r" values="16;24;16" dur="2.5s" repeatCount="indefinite" />
-      </circle>
-      <circle cx={start.x} cy={start.y} r="10" fill="#0e1a2a" stroke={mainColor} strokeWidth="2.5" />
-      <circle cx={start.x} cy={start.y} r="4" fill={mainColor} />
-      {shortStart && <text x={start.x + 2} y={start.y + 24} textAnchor="middle" fill={`${mainColor}88`} fontSize="7.5" fontFamily="monospace">{shortStart}</text>}
-      {/* End */}
-      <circle cx={end.x} cy={end.y} r="8" fill="#1a1a2e" stroke="#FF6B35" strokeWidth="2" />
-      <text x={end.x} y={end.y + 4} textAnchor="middle" fill="#FF6B35" fontSize="10">B</text>
-      {/* Discovery markers */}
-      {points.map((p, i) => {
-        const d = discoveries[i];
-        const color = VIBE_COLORS[d.vibe] || mainColor;
-        const isActive = active === i;
-        const isLocked = i > unlockedCount;
-        return (
-          <g key={i} opacity={isLocked ? 0.2 : 1}>
-            {isActive && !isLocked && <circle cx={p.x} cy={p.y} r="18" fill={color} opacity="0.15"><animate attributeName="r" values="18;24;18" dur="1.5s" repeatCount="indefinite" /></circle>}
-            <circle cx={p.x} cy={p.y} r="12" fill="#1a1a2e" stroke={isLocked ? "rgba(255,255,255,0.1)" : color} strokeWidth={isActive ? 2.5 : 1.5} />
-            <text x={p.x} y={p.y + 5} textAnchor="middle" fontSize="13">{isLocked ? "🔒" : d.icon}</text>
-          </g>
-        );
-      })}
-      <style>{`@keyframes drawPath { from { stroke-dashoffset: 1200; } to { stroke-dashoffset: 0; } }`}</style>
-    </svg>
-  );
+      <rect width="710" height="400" fill="#EDE4D3" />
+      <rect width="710" height="400" fill="url(#dots)" />
+      <rect width="710" height="400" fill="url(#mapVignette)" />
+      {/* Fold crease */}
+      <line x1="355" y1="0" x2="355" y2="400" stroke="rgba(44,36,22,0.05)" strokeWidth="1" />
+      {/* Worn edge marks */}
+      <rect x="0" y="0" width="710" height="3" fill="rgba(44,36,22,0.04)" />
+      <rect x="0" y="397" width="710" height="3" fill="rgba(44,36,22,0.04)" />
+      <line x1="20" y1="200" x2="690" y2="200" stroke={T.inkGhost} strokeWidth="1.5" strokeDasharray="6 4" />
+      <text x="355" y="188" textAnchor="middle" fill={T.inkFaint} fontSize="9" fontFamily="'Courier Prime',monospace" fontStyle="italic">the boring way</text>
+      <path d={d} fill="none" stroke={`${mc}30`} strokeWidth="10" strokeLinecap="round" />
+      <path d={d} fill="none" stroke={mc} strokeWidth="2" strokeLinecap="round" strokeDasharray="8 4" style={{animation:"drawPath 2.5s ease-out forwards"}} />
+      <circle cx={st.x} cy={st.y} r="10" fill={T.paper} stroke={mc} strokeWidth="2" />
+      <circle cx={st.x} cy={st.y} r="3" fill={mc} />
+      {sl&&<text x={st.x} y={st.y+22} textAnchor="middle" fill={T.inkFaint} fontSize="8" fontFamily="'Courier Prime',monospace">{sl}</text>}
+      <circle cx={en.x} cy={en.y} r="8" fill={T.paper} stroke={T.accent} strokeWidth="2" />
+      <text x={en.x} y={en.y+4} textAnchor="middle" fill={T.accent} fontSize="9" fontFamily="'Courier Prime',monospace" fontWeight="700">B</text>
+      {pts.map((p,i)=>{const dd=discoveries[i],c=VIBE_COLORS[dd.vibe]||mc,isA=active===i,isL=i>unlockedCount;return(
+        <g key={i} opacity={isL?0.25:1}>{isA&&!isL&&<circle cx={p.x} cy={p.y} r="16" fill="none" stroke={c} strokeWidth="1" strokeDasharray="3 2"><animate attributeName="r" values="14;20;14" dur="2s" repeatCount="indefinite" /></circle>}<circle cx={p.x} cy={p.y} r="12" fill={T.paper} stroke={isL?T.inkGhost:c} strokeWidth={isA?2:1.5} /><text x={p.x} y={p.y+5} textAnchor="middle" fontSize="12">{isL?"?":dd.icon}</text></g>
+      );})}
+      <style>{`@keyframes drawPath{from{stroke-dashoffset:1200;}to{stroke-dashoffset:0;}}`}</style>
+    </svg>);
 }
 
-function TreasureMap() {
-  const routes = antiCloud.routeCount;
-  const discoveries = antiCloud.totalDiscoveries;
-  const proofs = antiCloud.proofCount;
-  const history = antiCloud.completedRoutes;
+// ─── MAIN ───
+export default function Unroute(){
+  const[dest,setDest]=useState("");const[level,setLevel]=useState(5);const[vibeKey,setVibeKey]=useState("any");const[route,setRoute]=useState(null);const[phase,setPhase]=useState("input");const[activeDisc,setActiveDisc]=useState(null);const[loadingText,setLoadingText]=useState("");const[proofs,setProofs]=useState({});const[useManual,setUseManual]=useState(false);const[manualStart,setManualStart]=useState("");const[startCoords,setStartCoords]=useState(null);const[destCoords,setDestCoords]=useState(null);const[resolvedStart,setResolvedStart]=useState(null);const[resolvedDest,setResolvedDest]=useState(null);const[toast,setToast]=useState(null);const geo=useGeolocation();const topRef=useRef(null);
 
-  if (routes === 0) return null;
+  useEffect(()=>{if(geo.status==="denied"||geo.status==="unsupported")setUseManual(true);},[geo.status]);
+  useEffect(()=>{topRef.current?.scrollIntoView({behavior:"smooth"});},[phase]);
+  const unlockedCount=useMemo(()=>{if(!route)return 0;let c=0;for(let i=0;i<route.picks.length;i++){if(i===0||proofs[i-1])c=i+1;else break;}return c;},[route,proofs]);
 
-  return (
-    <div style={{
-      padding: "16px 20px", background: "rgba(255,255,255,0.02)", borderRadius: 14,
-      border: "1px solid rgba(255,255,255,0.06)", marginBottom: 24,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 16 }}>🗺️</span>
-        <span style={{ fontSize: 12, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.4)", letterSpacing: 1 }}>YOUR TREASURE MAP</span>
-        <span style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", color: "rgba(255,107,53,0.5)", marginLeft: "auto" }}>DEVICE-ONLY • EPHEMERAL</span>
+  const msgs=["Avoiding the fastest route…","Querying OpenStreetMap…","Finding real places you've ignored…","Filtering out the boring chains…","Calculating serendipity…","Asking a local cat for directions…","Writing AI descriptions…","Almost there…"];
+  const getSC=()=>{if(useManual&&startCoords)return startCoords;if(!useManual&&geo.coords)return{lat:geo.coords.lat,lng:geo.coords.lng};return null;};
+  const vibeColor=VIBE_ROUTES[vibeKey]?.color||T.teal;
+
+  const handleGenerate=async()=>{
+    if(!dest.trim())return;setPhase("loading");setProofs({});setToast(null);let fDC=destCoords,fSC=getSC();
+    if(!fDC){setLoadingText("Resolving destination…");try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(dest)}&format=json&limit=1`);const d=await r.json();if(d?.[0]){fDC={lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon)};setDestCoords(fDC);}}catch{}}
+    if(useManual&&manualStart.trim()&&!fSC){setLoadingText("Resolving start…");try{const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(manualStart)}&format=json&limit=1`);const d=await r.json();if(d?.[0]){fSC={lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon)};setStartCoords(fSC);}}catch{}}
+    if(!fSC||!fDC)setToast({message:"⚠ Pick both locations from the dropdown for real places.",type:"warning"});
+    let i=0;setLoadingText(msgs[0]);const rp=generateRouteAsync(level,vibeKey,fSC,fDC);const iv=setInterval(()=>{i++;if(i<msgs.length)setLoadingText(msgs[i]);},700);
+    const mw=new Promise(r=>setTimeout(r,Math.min(msgs.length,5)*700));
+    Promise.all([rp,mw]).then(([r])=>{clearInterval(iv);setRoute(r);setPhase("result");if(r.isReal)setToast({message:`Found ${r.picks.length} real places!`,type:"success"});else if(r.isPioneer)setToast({message:"No mapped places found — Pioneer Mode.",type:"warning"});}).catch(()=>{clearInterval(iv);const n=ROUTE_NAMES[vibeKey]||ROUTE_NAMES.any;setRoute({picks:[],extraMin:0,baseDist:"?",routeDist:"?",name:n[0],vibeKey,isReal:false,isPioneer:true});setPhase("result");setToast({message:"Something went wrong. Pioneer Mode.",type:"error"});});};
+
+  const handleReset=()=>{if(route)antiCloud.logRoute(route);setPhase("input");setRoute(null);setActiveDisc(null);setProofs({});};
+  const handleReshuffle=async()=>{setActiveDisc(null);setProofs({});try{setRoute(await generateRouteAsync(level,vibeKey,getSC(),destCoords));}catch{setRoute({picks:[],extraMin:0,baseDist:"?",routeDist:"?",name:"The Detour",vibeKey,isReal:false,isPioneer:true});}};
+
+  const startLabel=useManual?(manualStart.trim()||"Start"):geo.address?geo.address.split(",")[0].trim():geo.coords?`${geo.coords.lat.toFixed(3)}, ${geo.coords.lng.toFixed(3)}`:"You";
+
+  const labels=["","Slight detour","A little lost","Curious","Wandering","Exploring","Adventurous","Deep drift","Off the grid","Into the unknown","Maximum serendipity"];
+
+  return(
+    <div style={{minHeight:"100dvh",background:T.bg,backgroundImage:T.grain,backgroundSize:"600px 600px",fontFamily:"'Playfair Display',Georgia,serif",color:T.ink,position:"relative"}}>
+
+      {/* ── HEAVY WEATHERING OVERLAYS ── */}
+
+      {/* Dark edge vignette — much stronger, like the photo */}
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:2,background:"radial-gradient(ellipse at center, transparent 35%, rgba(110,68,32,0.1) 55%, rgba(60,35,12,0.22) 75%, rgba(35,20,5,0.35) 100%)"}} />
+
+      {/* Top edge — heavy brown staining */}
+      <div style={{position:"fixed",top:0,left:0,right:0,height:180,pointerEvents:"none",zIndex:2,background:"linear-gradient(to bottom, rgba(60,30,8,0.18) 0%, rgba(90,55,20,0.08) 40%, transparent 100%)"}} />
+
+      {/* Bottom edge — heavy brown staining */}
+      <div style={{position:"fixed",bottom:0,left:0,right:0,height:160,pointerEvents:"none",zIndex:2,background:"linear-gradient(to top, rgba(60,30,8,0.16) 0%, rgba(90,55,20,0.06) 40%, transparent 100%)"}} />
+
+      {/* Left edge staining */}
+      <div style={{position:"fixed",top:0,left:0,bottom:0,width:80,pointerEvents:"none",zIndex:2,background:"linear-gradient(to right, rgba(60,30,8,0.14) 0%, rgba(90,55,20,0.04) 60%, transparent 100%)"}} />
+
+      {/* Right edge staining */}
+      <div style={{position:"fixed",top:0,right:0,bottom:0,width:80,pointerEvents:"none",zIndex:2,background:"linear-gradient(to left, rgba(60,30,8,0.14) 0%, rgba(90,55,20,0.04) 60%, transparent 100%)"}} />
+
+      {/* Corner stains — darker in all four corners like the diary */}
+      <div style={{position:"fixed",top:0,left:0,width:200,height:200,pointerEvents:"none",zIndex:2,background:"radial-gradient(circle at 0% 0%, rgba(50,25,5,0.2) 0%, transparent 70%)"}} />
+      <div style={{position:"fixed",top:0,right:0,width:200,height:200,pointerEvents:"none",zIndex:2,background:"radial-gradient(circle at 100% 0%, rgba(50,25,5,0.18) 0%, transparent 70%)"}} />
+      <div style={{position:"fixed",bottom:0,left:0,width:200,height:200,pointerEvents:"none",zIndex:2,background:"radial-gradient(circle at 0% 100%, rgba(50,25,5,0.2) 0%, transparent 70%)"}} />
+      <div style={{position:"fixed",bottom:0,right:0,width:200,height:200,pointerEvents:"none",zIndex:2,background:"radial-gradient(circle at 100% 100%, rgba(50,25,5,0.18) 0%, transparent 70%)"}} />
+
+      {/* Notebook ruled lines */}
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:1,backgroundImage:`repeating-linear-gradient(to bottom, transparent, transparent 31px, rgba(110,68,32,0.08) 31px, rgba(110,68,32,0.08) 32px)`,backgroundSize:"100% 32px"}} />
+
+      {/* Big water/coffee stain — top right */}
+      <div style={{position:"fixed",top:30,right:-30,width:200,height:200,borderRadius:"50%",pointerEvents:"none",zIndex:2,background:"radial-gradient(circle, rgba(110,68,32,0.06) 30%, rgba(110,68,32,0.12) 60%, transparent 70%)"}} />
+      <div style={{position:"fixed",top:40,right:-20,width:180,height:180,borderRadius:"50%",border:"2px solid rgba(110,68,32,0.06)",pointerEvents:"none",zIndex:2}} />
+
+      {/* Smaller stain — bottom left */}
+      <div style={{position:"fixed",bottom:100,left:20,width:120,height:120,borderRadius:"50%",pointerEvents:"none",zIndex:2,background:"radial-gradient(circle, rgba(110,68,32,0.04) 40%, rgba(110,68,32,0.08) 65%, transparent 75%)"}} />
+
+      {/* Scratch mark — diagonal line like in the diary photo */}
+      <div style={{position:"fixed",top:"55%",right:"15%",width:80,height:1,pointerEvents:"none",zIndex:2,background:T.inkGhost,transform:"rotate(-25deg)",opacity:0.3}} />
+      <div style={{position:"fixed",top:"56%",right:"14%",width:50,height:1,pointerEvents:"none",zIndex:2,background:T.inkGhost,transform:"rotate(-35deg)",opacity:0.2}} />
+
+      {/* Ink splatters & foxing spots — scattered dark brown dots */}
+      <div style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:1,overflow:"hidden"}}>
+        {/* Large organic ink blob */}
+        <svg style={{position:"absolute",top:"6%",left:"-2%",width:140,height:140,opacity:0.15,transform:"rotate(35deg)"}} viewBox="0 0 100 100" fill={T.stain}>
+          <path d="M45,20 C55,15 65,30 50,45 C70,40 80,60 60,65 C70,80 50,90 40,70 C20,80 15,60 30,50 C10,40 20,20 40,30 Z" />
+          <circle cx="18" cy="18" r="3" /><circle cx="80" cy="25" r="2" /><circle cx="75" cy="80" r="3.5" />
+        </svg>
+        {/* Spray of small foxing dots */}
+        <svg style={{position:"absolute",top:"35%",right:"5%",width:90,height:90,opacity:0.12}} viewBox="0 0 100 100" fill={T.stain}>
+          <circle cx="50" cy="50" r="5" /><circle cx="25" cy="35" r="3" /><circle cx="72" cy="62" r="2" /><circle cx="58" cy="22" r="1.5" /><circle cx="38" cy="75" r="4" /><circle cx="82" cy="42" r="1.5" /><circle cx="15" cy="68" r="2.5" /><circle cx="65" cy="85" r="1" />
+        </svg>
+        {/* Smear mark */}
+        <svg style={{position:"absolute",bottom:"12%",left:"6%",width:120,height:50,opacity:0.12,transform:"rotate(-10deg)"}} viewBox="0 0 100 50" fill={T.stain}>
+          <path d="M10,25 C30,12 70,38 90,25 C80,42 40,18 20,42 Z" /><circle cx="12" cy="10" r="2" /><circle cx="90" cy="40" r="1.5" />
+        </svg>
+        {/* Extra foxing scatter */}
+        <svg style={{position:"absolute",top:"70%",left:"40%",width:60,height:60,opacity:0.1}} viewBox="0 0 100 100" fill={T.stain}>
+          <circle cx="20" cy="30" r="3" /><circle cx="60" cy="20" r="2" /><circle cx="80" cy="70" r="4" /><circle cx="40" cy="80" r="2" /><circle cx="10" cy="65" r="1.5" />
+        </svg>
+        <svg style={{position:"absolute",top:"15%",right:"20%",width:40,height:40,opacity:0.09}} viewBox="0 0 100 100" fill={T.stain}>
+          <circle cx="30" cy="50" r="4" /><circle cx="70" cy="30" r="2.5" /><circle cx="50" cy="80" r="3" />
+        </svg>
       </div>
-      <div style={{ display: "flex", gap: 20, marginBottom: history.length ? 12 : 0 }}>
-        {[
-          { n: routes, label: "Routes", color: "#4ECDC4" },
-          { n: discoveries, label: "Discoveries", color: "#FFD700" },
-          { n: proofs, label: "Proofs", color: "#FF6B35" },
-        ].map(s => (
-          <div key={s.label}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: s.color, fontFamily: "'Space Grotesk', sans-serif", lineHeight: 1 }}>{s.n}</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace" }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-      {history.length > 0 && (
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: 10 }}>
-          {history.slice(-3).reverse().map((r, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-              <span style={{ fontSize: 12 }}>{VIBE_ROUTES[r.vibe]?.icon || "🧭"}</span>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "'DM Mono', monospace", flex: 1 }}>{r.name}</span>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontFamily: "'DM Mono', monospace" }}>{r.discoveries} finds • {r.date}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
-// ─── MAIN APP ───
-export default function Unroute() {
-  const [destination, setDestination] = useState("");
-  const [level, setLevel] = useState(5);
-  const [vibeKey, setVibeKey] = useState("any");
-  const [route, setRoute] = useState(null);
-  const [phase, setPhase] = useState("input");
-  const [activeDisc, setActiveDisc] = useState(null);
-  const [loadingText, setLoadingText] = useState("");
-  const [proofs, setProofs] = useState({}); // index -> dataURL
-  const [useManual, setUseManual] = useState(false);
-  const [manualStart, setManualStart] = useState("");
-  const [startCoords, setStartCoords] = useState(null); // { lat, lng } from autocomplete
-  const [destCoords, setDestCoords] = useState(null); // { lat, lng } from autocomplete
-  const [resolvedStart, setResolvedStart] = useState(null); // full place object from autocomplete
-  const [resolvedDest, setResolvedDest] = useState(null); // full place object from autocomplete
-  const geo = useGeolocation();
-
-  // Auto-switch to manual input if GPS is denied or unsupported
-  useEffect(() => {
-    if (geo.status === "denied" || geo.status === "unsupported") setUseManual(true);
-  }, [geo.status]);
-
-  // Progressive unlock: first is always visible; each subsequent unlocks when previous has a proof
-  const unlockedCount = useMemo(() => {
-    if (!route) return 0;
-    let count = 0;
-    for (let i = 0; i < route.picks.length; i++) {
-      if (i === 0 || proofs[i - 1]) count = i + 1;
-      else break;
-    }
-    return count;
-  }, [route, proofs]);
-
-  const loadingMessages = [
-    "Pinpointing your location…",
-    "Avoiding the fastest route…",
-    "Querying OpenStreetMap…",
-    "Finding real places you've ignored…",
-    "Scanning for hidden gems nearby…",
-    "Calculating serendipity index…",
-    "Asking a local cat for directions…",
-    "Optimising for wonder…",
-  ];
-
-  // Resolve the effective start coords
-  const getStartCoords = () => {
-    if (useManual && startCoords) return startCoords;
-    if (!useManual && geo.coords) return { lat: geo.coords.lat, lng: geo.coords.lng };
-    return null;
-  };
-
-  const handleGenerate = async () => {
-    if (!destination.trim()) return;
-    setPhase("loading");
-    setProofs({});
-    let i = 0;
-
-    // ── FALLBACK GEOCODING: if user typed but didn't select from dropdown ──
-    let finalDestCoords = destCoords;
-    let finalStartCoords = getStartCoords();
-
-    if (!finalDestCoords) {
-      setLoadingText("Resolving your destination…");
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(destination)}&format=json&limit=1`);
-        const data = await res.json();
-        if (data && data.length > 0) {
-          finalDestCoords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-          setDestCoords(finalDestCoords);
-        }
-      } catch { /* proceed without coords */ }
-    }
-
-    if (useManual && manualStart.trim() && !finalStartCoords) {
-      setLoadingText("Resolving your starting point…");
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(manualStart)}&format=json&limit=1`);
-        const data = await res.json();
-        if (data && data.length > 0) {
-          finalStartCoords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-          setStartCoords(finalStartCoords);
-        }
-      } catch { /* proceed without coords */ }
-    }
-
-    const hasCoords = finalStartCoords && finalDestCoords;
-    const msgs = hasCoords
-      ? [...loadingMessages.filter(m => m !== "Pinpointing your location…"), "Generating AI descriptions…"]
-      : loadingMessages;
-    setLoadingText(msgs[0]);
-
-    // Start async fetch in parallel with loading animation
-    const routePromise = generateRouteAsync(level, vibeKey, finalStartCoords, finalDestCoords);
-
-    const interval = setInterval(() => {
-      i++;
-      if (i < msgs.length) {
-        setLoadingText(msgs[i]);
-      }
-    }, 650);
-
-    // Wait for both minimum loading time and actual data
-    const minWait = new Promise(res => setTimeout(res, Math.min(msgs.length, 6) * 650));
-    Promise.all([routePromise, minWait]).then(([r]) => {
-      clearInterval(interval);
-      setRoute(r);
-      setPhase("result");
-    }).catch(() => {
-      clearInterval(interval);
-      // Complete failure — go to Pioneer Mode
-      const names = ROUTE_NAMES[vibeKey] || ROUTE_NAMES.any;
-      setRoute({ picks: [], extraMin: 0, baseDist: "?", routeDist: "?", name: names[0], vibeKey, isReal: false, isPioneer: true });
-      setPhase("result");
-    });
-  };
-
-  const handleReset = () => {
-    if (route) antiCloud.logRoute(route);
-    setPhase("input");
-    setRoute(null);
-    setActiveDisc(null);
-    setProofs({});
-  };
-
-  const handleReshuffle = async () => {
-    setActiveDisc(null);
-    setProofs({});
-    try {
-      const r = await generateRouteAsync(level, vibeKey, getStartCoords(), destCoords);
-      setRoute(r);
-    } catch {
-      const names = ROUTE_NAMES[vibeKey] || ROUTE_NAMES.any;
-      setRoute({ picks: [], extraMin: 0, baseDist: "?", routeDist: "?", name: names[0], vibeKey, isReal: false, isPioneer: true });
-    }
-  };
-
-  const startLabel = useManual
-    ? (manualStart.trim() || "Custom start")
-    : geo.address ? geo.address.split(",")[0].trim() : geo.coords ? `${geo.coords.lat.toFixed(3)}, ${geo.coords.lng.toFixed(3)}` : "You";
-  const vibeColor = VIBE_ROUTES[vibeKey]?.color || "#4ECDC4";
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#0a0a14", fontFamily: "'Space Grotesk', -apple-system, sans-serif", color: "#fff", position: "relative", overflow: "hidden" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        input[type="range"]::-webkit-slider-thumb { appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid #0a0a14; cursor: pointer; box-shadow: 0 0 12px rgba(78,205,196,0.5); }
-        input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid #0a0a14; cursor: pointer; }
-        @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-        ::selection { background: #4ECDC4; color: #0a0a14; }
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Caveat:wght@500;600;700&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0;}
+        html{-webkit-text-size-adjust:100%;}
+        body{overscroll-behavior:none;}
+        input[type="text"]{font-size:16px !important;}
+        input[type="range"]::-webkit-slider-thumb{appearance:none;width:28px;height:28px;border-radius:50%;background:${T.paper};border:3px solid ${T.accent};cursor:pointer;box-shadow:0 2px 6px ${T.shadow};}
+        input[type="range"]::-moz-range-thumb{width:28px;height:28px;border-radius:50%;background:${T.paper};border:3px solid ${T.accent};cursor:pointer;}
+        button{-webkit-tap-highlight-color:transparent;}
+        button:active{opacity:0.85;}
+        .hd{border-radius:255px 15px 225px 15px / 15px 225px 15px 255px !important;}
+        .hd-alt{border-radius:15px 255px 15px 225px / 255px 15px 225px 15px !important;}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+        @keyframes pulse{0%,100%{opacity:0.4;}50%{opacity:1;}}
+        @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+        @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+        ::selection{background:${T.accent};color:${T.paper};}
+        a{color:${T.teal};}
       `}</style>
 
-      {/* Ambient glow */}
-      <div style={{ position: "fixed", top: "-30%", right: "-20%", width: "60vw", height: "60vw", borderRadius: "50%", background: `radial-gradient(circle, ${vibeColor}08 0%, transparent 70%)`, pointerEvents: "none", transition: "background 0.5s" }} />
-      <div style={{ position: "fixed", bottom: "-20%", left: "-10%", width: "50vw", height: "50vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(255,107,53,0.03) 0%, transparent 70%)", pointerEvents: "none" }} />
+      {toast&&<Toast message={toast.message} type={toast.type} onDismiss={()=>setToast(null)} />}
 
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "40px 20px 60px" }}>
-        {/* Header */}
-        <div style={{ marginBottom: 28, animation: "fadeSlideIn 0.6s ease" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-            <span style={{ fontSize: 28 }}>🧭</span>
-            <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -1, background: `linear-gradient(135deg, ${vibeColor}, #FF6B35)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", transition: "background 0.5s" }}>
-              Unroute
-            </h1>
-            <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.2)", padding: "2px 6px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, marginLeft: 4 }}>V3</span>
+      <div ref={topRef} style={{maxWidth:620,margin:"0 auto",padding:`max(24px,env(safe-area-inset-top,24px)) 24px max(32px,env(safe-area-inset-bottom,32px))`,paddingTop:48}}>
+
+        {/* ── HEADER ── */}
+        <div style={{marginBottom:32,animation:"fadeIn 0.6s ease"}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:8}}>
+            <h1 style={{fontSize:38,fontWeight:900,letterSpacing:-1,color:T.ink,fontStyle:"italic"}}>Unroute</h1>
+            <span style={{fontSize:18,opacity:0.5}}>🧭</span>
           </div>
-          <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.35)", fontFamily: "'DM Mono', monospace", maxWidth: 420, lineHeight: 1.5, marginBottom: 10 }}>
-            Get lost on purpose. Prove you were there. Keep no cloud receipts.
+          <p style={{fontSize:15,color:T.inkLight,fontFamily:"'Courier Prime',monospace",maxWidth:380,lineHeight:1.7,marginBottom:14}}>
+            The intentionally inefficient route planner.<br/>Get lost safely. Find what you weren't looking for.
           </p>
-          <LocationBadge geo={geo} />
+          {geo.status==="located"&&<div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 12px",border:`1px dashed ${T.teal}`,borderRadius:2,fontFamily:"'Courier Prime',monospace",fontSize:12,color:T.teal}}><span style={{width:6,height:6,borderRadius:"50%",background:T.teal,display:"inline-block"}} />{geo.address}</div>}
+          {(geo.status==="requesting"||geo.status==="idle")&&<div style={{fontFamily:"'Courier Prime',monospace",fontSize:12,color:T.inkFaint,fontStyle:"italic"}}>◌ Locating you…</div>}
+          {(geo.status==="denied"||geo.status==="unsupported")&&<div style={{fontFamily:"'Courier Prime',monospace",fontSize:12,color:T.accent}}>✕ Location unavailable</div>}
         </div>
 
-        {/* Treasure Map Stats */}
-        <TreasureMap />
+        {/* ── TREASURE MAP ── */}
+        {antiCloud.routeCount>0&&(
+          <div style={{padding:"18px 22px",background:T.paper,border:`1.5px solid ${T.inkGhost}`,borderRadius:2,marginBottom:28,boxShadow:`2px 2px 8px ${T.shadow}, inset 0 0 20px rgba(139,105,20,0.02)`,transform:"rotate(-0.2deg)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}><span style={{fontSize:16}}>🗺️</span><span style={{fontFamily:"'Courier Prime',monospace",fontSize:12,color:T.inkFaint,letterSpacing:1.5,fontWeight:700}}>YOUR TREASURE MAP</span><span style={{fontFamily:"'Courier Prime',monospace",fontSize:9,color:T.accent,marginLeft:"auto"}}>DEVICE-ONLY</span></div>
+            <div style={{display:"flex",gap:28}}>
+              {[{n:antiCloud.routeCount,l:"Routes",c:T.teal},{n:antiCloud.totalDiscoveries,l:"Finds",c:T.gold},{n:antiCloud.proofCount,l:"Proofs",c:T.accent}].map(s=><div key={s.l}><div style={{fontSize:30,fontWeight:900,color:s.c,fontFamily:"'Playfair Display',serif"}}>{s.n}</div><div style={{fontSize:11,color:T.inkFaint,fontFamily:"'Courier Prime',monospace"}}>{s.l}</div></div>)}
+            </div>
+          </div>
+        )}
 
         {/* ── INPUT PHASE ── */}
-        {phase === "input" && (
-          <div style={{ animation: "fadeSlideIn 0.5s ease" }}>
-            {/* Starting from */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <label style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.4)", letterSpacing: 1.5 }}>STARTING FROM</label>
-                <button onClick={() => setUseManual(!useManual)} style={{
-                  fontSize: 10, fontFamily: "'DM Mono', monospace", padding: "3px 8px",
-                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 6, color: "rgba(255,255,255,0.4)", cursor: "pointer", transition: "all 0.2s",
-                }}>
-                  {useManual ? "📡 Use GPS" : "✏️ Type manually"}
+        {phase==="input"&&(
+          <div style={{animation:"fadeIn 0.5s ease"}}>
+            <div style={{marginBottom:24}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <label style={{fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700}}>STARTING FROM</label>
+                <button onClick={()=>setUseManual(!useManual)} style={{fontSize:11,fontFamily:"'Courier Prime',monospace",padding:"6px 12px",background:"transparent",border:`1px solid ${T.inkGhost}`,borderRadius:2,color:T.inkLight,cursor:"pointer",minHeight:32}}>
+                  {useManual?"◉ Use GPS":"✎ Type it"}
                 </button>
               </div>
-
-              {useManual ? (
-                <PlaceAutocomplete
-                  value={manualStart}
-                  onChange={(v) => { setManualStart(v); }}
-                  onSelect={(s) => {
-                    if (!s) { setStartCoords(null); setResolvedStart(null); return; }
-                    setManualStart(s.display); setStartCoords({ lat: s.lat, lng: s.lng }); setResolvedStart(s);
-                  }}
-                  placeholder="e.g. King's Cross, SE1 9SG, Hackney Wick…"
-                  accentColor={vibeColor}
-                  resolvedPlace={resolvedStart}
-                />
-              ) : (
-                <div style={{ padding: "12px 16px", fontSize: 14, background: `${vibeColor}08`, border: `1px solid ${vibeColor}20`, borderRadius: 12, color: "rgba(255,255,255,0.6)", fontFamily: "'DM Mono', monospace", display: "flex", alignItems: "center", gap: 8 }}>
-                  {geo.status === "located" ? (
-                    <>
-                      <span style={{ color: vibeColor, fontSize: 14 }}>📍</span>
-                      <span style={{ color: "#fff", fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{geo.address || "Your location"}</span>
-                      {geo.coords && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", flexShrink: 0 }}>{geo.coords.lat.toFixed(4)}, {geo.coords.lng.toFixed(4)}</span>}
-                    </>
-                  ) : geo.status === "requesting" || geo.status === "idle" ? (
-                    <><span style={{ animation: "pulse 1.2s ease-in-out infinite" }}>📡</span><span>Getting your location…</span></>
-                  ) : (
-                    <><span>⚠️</span><span>Location unavailable — type manually instead</span></>
-                  )}
+              {useManual?(
+                <PlaceAutocomplete value={manualStart} onChange={setManualStart} onSelect={(s)=>{if(!s){setStartCoords(null);setResolvedStart(null);return;}setManualStart(s.display);setStartCoords({lat:s.lat,lng:s.lng});setResolvedStart(s);}} placeholder="King's Cross, SE1 9SG, Hackney Wick…" accentColor={vibeColor} resolvedPlace={resolvedStart} />
+              ):(
+                <div style={{padding:"14px 16px",fontSize:14,background:T.paper,border:`1.5px solid ${T.inkGhost}`,borderRadius:3,fontFamily:"'Courier Prime',monospace",display:"flex",alignItems:"center",gap:10,minHeight:50,boxShadow:`inset 0 1px 3px ${T.shadow}`}}>
+                  {geo.status==="located"?(<><span style={{color:T.teal}}>◉</span><span style={{color:T.ink,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{geo.address||"Your location"}</span>{geo.coords&&<span style={{fontSize:10,color:T.inkFaint}}>{geo.coords.lat.toFixed(4)}, {geo.coords.lng.toFixed(4)}</span>}</>)
+                  :geo.status==="requesting"?(<span style={{color:T.inkFaint,fontStyle:"italic"}}>◌ Getting location…</span>)
+                  :(<span style={{color:T.accent}}>✕ Location unavailable — switch to manual</span>)}
                 </div>
               )}
             </div>
 
-            {/* Destination */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.4)", letterSpacing: 1.5, marginBottom: 8 }}>WHERE ARE YOU TRYING TO GO?</label>
-              <PlaceAutocomplete
-                value={destination}
-                onChange={(v) => { setDestination(v); }}
-                onSelect={(s) => {
-                  if (!s) { setDestCoords(null); setResolvedDest(null); return; }
-                  setDestination(s.display); setDestCoords({ lat: s.lat, lng: s.lng }); setResolvedDest(s);
-                }}
-                placeholder="e.g. Bermondsey Station, E1 6AN, London Bridge…"
-                accentColor={vibeColor}
-                fontFamily="'Space Grotesk', sans-serif"
-                resolvedPlace={resolvedDest}
-              />
+            <div style={{marginBottom:24}}>
+              <label style={{display:"block",fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700,marginBottom:10}}>DESTINATION</label>
+              <PlaceAutocomplete value={dest} onChange={setDest} onSelect={(s)=>{if(!s){setDestCoords(null);setResolvedDest(null);return;}setDest(s.display);setDestCoords({lat:s.lat,lng:s.lng});setResolvedDest(s);}} placeholder="Bermondsey Station, E1 6AN, London Bridge…" accentColor={vibeColor} resolvedPlace={resolvedDest} />
             </div>
 
-            {/* Vibe Selector */}
-            <div style={{ marginBottom: 24 }}>
-              <VibeSelector selected={vibeKey} onChange={setVibeKey} />
+            {/* Vibe selector */}
+            <div style={{marginBottom:28}}>
+              <label style={{display:"block",fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700,marginBottom:10}}>FLAVOUR OF LOST</label>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {Object.entries(VIBE_ROUTES).map(([key,v],idx)=>{const isA=vibeKey===key;const tilt=(idx%2===0?1:-1)*(0.8+idx*0.2);return(
+                  <button key={key} className={idx%2===0?"hd":"hd-alt"} onClick={()=>setVibeKey(key)} style={{padding:"16px",border:`2px solid ${isA?v.color:T.inkGhost}`,background:isA?v.soft:"transparent",cursor:"pointer",textAlign:"left",transition:"all 0.15s",minHeight:52,transform:`rotate(${tilt}deg)${isA?" scale(1.02)":""}`,boxShadow:isA?`2px 3px 0px ${v.color}40`:"none"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:20}}>{v.icon}</span><span style={{fontSize:15,fontWeight:700,color:isA?v.color:T.inkLight,fontFamily:"'Playfair Display',serif"}}>{v.label}</span></div>
+                    <p style={{fontSize:12,color:T.inkFaint,fontFamily:"'Courier Prime',monospace",margin:0,lineHeight:1.4}}>{v.desc}</p>
+                  </button>);
+                })}
+              </div>
             </div>
 
-            {/* Discovery Level */}
-            <div style={{ marginBottom: 32 }}>
-              <DiscoverySlider value={level} onChange={setLevel} />
+            {/* Level slider */}
+            <div style={{marginBottom:36}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+                <span style={{fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700}}>DISCOVERY LEVEL</span>
+                <span style={{fontSize:40,fontFamily:"'Playfair Display',serif",fontWeight:900,color:vibeColor,lineHeight:1}}>{level}</span>
+              </div>
+              <input type="range" min="1" max="10" value={level} onChange={e=>setLevel(parseInt(e.target.value))} style={{width:"100%",height:6,appearance:"none",background:`linear-gradient(90deg, ${T.teal}, ${T.gold}, ${T.accent})`,borderRadius:3,outline:"none",cursor:"pointer"}} />
+              <div style={{marginTop:8,fontSize:13,color:T.inkFaint,fontFamily:"'Courier Prime',monospace",textAlign:"center",fontStyle:"italic"}}>{labels[level]}</div>
             </div>
 
-            <button onClick={handleGenerate} disabled={!destination.trim()} style={{
-              width: "100%", padding: "16px 24px", fontSize: 15, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif",
-              background: destination.trim() ? `linear-gradient(135deg, ${vibeColor}, ${vibeColor}CC)` : "rgba(255,255,255,0.05)",
-              color: destination.trim() ? "#0a0a14" : "rgba(255,255,255,0.2)",
-              border: "none", borderRadius: 12, cursor: destination.trim() ? "pointer" : "default", transition: "all 0.3s ease", letterSpacing: 0.5,
-            }}>
+            <button className="hd" onClick={handleGenerate} disabled={!dest.trim()} style={{width:"100%",padding:"20px 24px",fontSize:18,fontWeight:700,fontFamily:"'Playfair Display',serif",fontStyle:"italic",background:dest.trim()?T.ink:"transparent",color:dest.trim()?T.paper:T.inkGhost,border:`2.5px solid ${dest.trim()?T.ink:T.inkGhost}`,cursor:dest.trim()?"pointer":"default",transition:"all 0.3s",minHeight:60,letterSpacing:0.5,opacity:dest.trim()?1:0.4,transform:"rotate(-0.4deg)",boxShadow:dest.trim()?`3px 4px 0px ${T.inkGhost}`:"none"}}>
               Get Beautifully Lost →
             </button>
 
-            <div style={{ marginTop: 20, padding: 14, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" }}>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", fontFamily: "'DM Mono', monospace", lineHeight: 1.6 }}>
-                📸 Routes unlock step-by-step — prove you found each discovery to reveal the next. · ✨ AI writes bespoke descriptions for real places. · 🏴‍☠️ No results? Pioneer Mode kicks in. · 🗺️ Your routes live only on this device.
-              </p>
+            <div style={{marginTop:24,padding:"14px 18px",borderLeft:`3px solid ${T.inkGhost}`,fontFamily:"'Courier Prime',monospace",fontSize:12,color:T.inkFaint,lineHeight:1.8,fontStyle:"italic"}}>
+              Routes unlock step-by-step — prove you found each stop to see the next. Real places from OpenStreetMap. AI descriptions when available. Everything stays on your device.
             </div>
           </div>
         )}
 
         {/* ── LOADING ── */}
-        {phase === "loading" && (
-          <div style={{ textAlign: "center", padding: "80px 20px", animation: "fadeSlideIn 0.4s ease" }}>
-            <div style={{ fontSize: 48, marginBottom: 24, animation: "float 2s ease-in-out infinite" }}>{VIBE_ROUTES[vibeKey]?.icon || "🧭"}</div>
-            <p style={{ fontSize: 14, fontFamily: "'DM Mono', monospace", color: vibeColor, animation: "pulse 1.2s ease-in-out infinite" }}>{loadingText}</p>
+        {phase==="loading"&&(
+          <div style={{textAlign:"center",padding:"80px 20px",animation:"fadeIn 0.4s ease"}}>
+            <div style={{fontSize:56,marginBottom:28,animation:"float 2.5s ease-in-out infinite"}}>{VIBE_ROUTES[vibeKey]?.icon||"🧭"}</div>
+            <p style={{fontSize:16,fontFamily:"'Courier Prime',monospace",color:T.inkLight,fontStyle:"italic",lineHeight:1.6}}>{loadingText}</p>
+            <div style={{marginTop:32,width:160,height:2,background:T.inkGhost,borderRadius:1,margin:"32px auto 0",overflow:"hidden"}}>
+              <div style={{height:"100%",background:vibeColor,borderRadius:1,animation:"loadBar 3.5s ease-in-out infinite"}} />
+            </div>
+            <style>{`@keyframes loadBar{0%{width:0%;}50%{width:75%;}100%{width:100%;}}`}</style>
           </div>
         )}
 
         {/* ── RESULT ── */}
-        {phase === "result" && route && (
-          <div style={{ animation: "fadeSlideIn 0.5s ease" }}>
-            {/* Route header */}
-            <div style={{ padding: "20px 24px", marginBottom: 20, background: "rgba(255,255,255,0.02)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)", letterSpacing: 1 }}>YOUR ROUTE</span>
-                    <span style={{ fontSize: 10, padding: "2px 8px", background: `${vibeColor}15`, color: vibeColor, borderRadius: 10, fontFamily: "'DM Mono', monospace" }}>
-                      {VIBE_ROUTES[vibeKey]?.icon} {VIBE_ROUTES[vibeKey]?.label}
-                    </span>
-                    <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 8, fontFamily: "'DM Mono', monospace",
-                      background: route.isReal ? "rgba(78,205,196,0.1)" : route.isPioneer ? "rgba(255,215,0,0.1)" : "rgba(255,255,255,0.04)",
-                      color: route.isReal ? "#4ECDC4" : route.isPioneer ? "#FFD700" : "rgba(255,255,255,0.25)",
-                      border: `1px solid ${route.isReal ? "rgba(78,205,196,0.2)" : route.isPioneer ? "rgba(255,215,0,0.2)" : "rgba(255,255,255,0.06)"}`,
-                    }}>
-                      {route.isReal ? "🟢 REAL PLACES" : route.isPioneer ? "🟡 PIONEER MODE" : "⚪ SIMULATED"}
-                    </span>
-                    {route.isReal && route.picks?.some(p => p.aiEnhanced) && (
-                      <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 8, fontFamily: "'DM Mono', monospace",
-                        background: "rgba(123,104,238,0.1)", color: "#7B68EE", border: "1px solid rgba(123,104,238,0.2)",
-                      }}>
-                        ✨ AI-ENHANCED
-                      </span>
-                    )}
-                  </div>
-                  <h2 style={{ fontSize: 22, fontWeight: 600, color: "#fff", letterSpacing: -0.5 }}>{route.name}</h2>
-                  <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", fontFamily: "'DM Mono', monospace", marginTop: 4 }}>
-                    <span style={{ color: `${vibeColor}99` }}>📍 {startLabel}</span>
-                    <span style={{ margin: "0 6px", color: "rgba(255,255,255,0.15)" }}>→</span>
-                    <span style={{ color: vibeColor }}>{destination}</span>
-                  </p>
-                  {(startCoords || destCoords) && (
-                    <p style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", fontFamily: "'DM Mono', monospace", marginTop: 3 }}>
-                      {useManual && startCoords ? `${startCoords.lat.toFixed(4)}, ${startCoords.lng.toFixed(4)}` : geo.coords ? `${geo.coords.lat.toFixed(4)}, ${geo.coords.lng.toFixed(4)}` : "—"}
-                      {" → "}
-                      {destCoords ? `${destCoords.lat.toFixed(4)}, ${destCoords.lng.toFixed(4)}` : "—"}
-                    </p>
-                  )}
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ display: "flex", gap: 16, justifyContent: "flex-end" }}>
-                    <div>
-                      <p style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.3)" }}>EFFICIENT</p>
-                      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.15)", fontFamily: "'DM Mono', monospace", textDecoration: "line-through" }}>{route.baseDist} km</p>
-                    </div>
-                    <div>
-                      <p style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: vibeColor }}>ADVENTURE</p>
-                      <p style={{ fontSize: 14, color: "#fff", fontWeight: 600, fontFamily: "'DM Mono', monospace" }}>{route.routeDist} km</p>
-                    </div>
-                  </div>
-                  <p style={{ fontSize: 11, color: "#FF6B35", fontFamily: "'DM Mono', monospace", marginTop: 6 }}>+{route.extraMin} min of wonder</p>
-                </div>
+        {phase==="result"&&route&&(
+          <div style={{animation:"fadeIn 0.5s ease"}}>
+            {/* Header card */}
+            <div style={{padding:"24px",marginBottom:24,background:T.paper,border:`1.5px solid ${T.inkGhost}`,borderRadius:2,boxShadow:`2px 3px 12px ${T.shadow}, inset 0 0 30px rgba(139,105,20,0.02)`,position:"relative",overflow:"hidden"}}>
+              {/* Subtle aged corner */}
+              <div style={{position:"absolute",top:0,right:0,width:40,height:40,background:"linear-gradient(135deg, transparent 50%, rgba(44,36,22,0.03) 50%)",pointerEvents:"none"}} />
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}}>
+                <Stamp color={vibeColor}>{VIBE_ROUTES[vibeKey]?.label}</Stamp>
+                {route.isReal?<Stamp color={T.teal}>REAL PLACES</Stamp>:route.isPioneer?<Stamp color={T.gold}>PIONEER MODE</Stamp>:<Stamp color={T.inkFaint}>NO DATA</Stamp>}
+                {route.isReal&&route.picks?.some(p=>p.aiEnhanced)&&<Stamp color={T.gold}>AI-WRITTEN</Stamp>}
               </div>
-              {route.picks.length > 0 && (
-                <>
-                  <div style={{ marginTop: 14, height: 4, background: "rgba(255,255,255,0.04)", borderRadius: 2, overflow: "hidden" }}>
-                    <div style={{
-                      height: "100%", borderRadius: 2, transition: "width 0.5s ease",
-                      background: `linear-gradient(90deg, ${vibeColor}, #FF6B35)`,
-                      width: `${(Object.keys(proofs).length / route.picks.length) * 100}%`,
-                    }} />
-                  </div>
-                  <p style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.2)", marginTop: 6 }}>
-                    {Object.keys(proofs).length}/{route.picks.length} discoveries verified
-                  </p>
-                </>
+              <h2 style={{fontSize:32,fontWeight:700,color:T.ink,letterSpacing:-0.5,marginBottom:6,fontFamily:"'Caveat',cursive",transform:"rotate(-0.5deg)"}}>{route.name}</h2>
+              <p style={{fontSize:16,color:T.inkLight,fontFamily:"'Caveat',cursive",fontWeight:600}}>
+                <span style={{color:vibeColor}}>◉ {startLabel}</span><span style={{margin:"0 8px",color:T.inkGhost,fontFamily:"'Courier Prime',monospace",fontSize:12}}>→</span><span style={{color:T.accent}}>{dest}</span>
+              </p>
+              {route.picks.length>0&&(
+                <div style={{display:"flex",gap:20,marginTop:16,paddingTop:16,borderTop:`1px dashed ${T.inkGhost}`}}>
+                  <div><span style={{fontSize:10,fontFamily:"'Courier Prime',monospace",color:T.inkFaint}}>EFFICIENT</span><div style={{fontSize:16,fontFamily:"'Courier Prime',monospace",color:T.inkGhost,textDecoration:"line-through"}}>{route.baseDist} km</div></div>
+                  <div><span style={{fontSize:10,fontFamily:"'Courier Prime',monospace",color:vibeColor}}>ADVENTURE</span><div style={{fontSize:16,fontFamily:"'Courier Prime',monospace",color:T.ink,fontWeight:700}}>{route.routeDist} km</div></div>
+                  <div style={{marginLeft:"auto",textAlign:"right"}}><span style={{fontSize:10,fontFamily:"'Courier Prime',monospace",color:T.accent}}>EXTRA TIME</span><div style={{fontSize:16,fontFamily:"'Courier Prime',monospace",color:T.accent,fontWeight:700}}>+{route.extraMin} min</div></div>
+                </div>
+              )}
+              {route.picks.length>0&&(
+                <div style={{marginTop:14}}>
+                  <div style={{height:3,background:T.inkGhost,borderRadius:1,overflow:"hidden"}}><div style={{height:"100%",background:vibeColor,borderRadius:1,transition:"width 0.5s",width:`${(Object.keys(proofs).length/route.picks.length)*100}%`}} /></div>
+                  <p style={{fontSize:10,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,marginTop:6}}>{Object.keys(proofs).length} of {route.picks.length} verified</p>
+                </div>
               )}
             </div>
 
-            {/* Map — only show with real discoveries */}
-            {route.picks.length > 0 && (
-              <div style={{ marginBottom: 20, borderRadius: 14, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)", background: "#0d0d1a" }}>
-                <RouteMap discoveries={route.picks} active={activeDisc} startLabel={startLabel} vibeColor={vibeColor} unlockedCount={unlockedCount} />
-              </div>
-            )}
+            {/* Map */}
+            {route.picks.length>0&&<div style={{marginBottom:24,borderRadius:3,overflow:"hidden",border:`1.5px solid ${T.inkGhost}`,boxShadow:`0 2px 8px ${T.shadow}`}}><RouteMap discoveries={route.picks} active={activeDisc} startLabel={startLabel} vibeColor={vibeColor} unlockedCount={unlockedCount} /></div>}
 
-            {/* Pioneer Mode Banner — when no real places found */}
-            {route.isPioneer && (
-              <div style={{
-                padding: "24px", marginBottom: 16, borderRadius: 14,
-                background: "rgba(255,215,0,0.04)", border: "1px dashed rgba(255,215,0,0.25)",
-                animation: "fadeSlideIn 0.5s ease",
-              }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                  <span style={{ fontSize: 32 }}>🏴‍☠️</span>
+            {/* Pioneer */}
+            {route.isPioneer&&(
+              <div style={{padding:"28px",marginBottom:24,background:T.goldSoft,border:`1.5px dashed ${T.gold}`,borderRadius:3,animation:"fadeIn 0.5s ease"}}>
+                <div style={{display:"flex",alignItems:"flex-start",gap:14}}>
+                  <span style={{fontSize:36}}>🏴‍☠️</span>
                   <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 600, color: "#FFD700", fontFamily: "'Space Grotesk', sans-serif", marginBottom: 8 }}>
-                      Pioneer Mode
-                    </h3>
-                    <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", fontFamily: "'DM Mono', monospace", lineHeight: 1.6, marginBottom: 12 }}>
-                      {!getStartCoords() || !destCoords
-                        ? "We need real coordinates to find real places. Select locations from the autocomplete dropdown so we can search OpenStreetMap."
-                        : "OpenStreetMap has no mapped gems between these two points. This area is uncharted territory."
-                      }
+                    <h3 style={{fontSize:20,fontWeight:900,color:T.gold,fontStyle:"italic",marginBottom:8}}>Pioneer Mode</h3>
+                    <p style={{fontSize:14,color:T.inkLight,fontFamily:"'Courier Prime',monospace",lineHeight:1.8,marginBottom:14}}>
+                      {!getSC()||!destCoords?"We need coordinates to search. Pick both locations from the dropdown suggestions.":"OpenStreetMap has nothing mapped between these points. You're in uncharted territory."}
                     </p>
-                    <p style={{ fontSize: 13, color: "#FFD700", fontFamily: "'DM Mono', monospace", lineHeight: 1.6, marginBottom: 16 }}>
-                      {!getStartCoords() || !destCoords
-                        ? "Go back and pick your start and destination from the suggestions."
-                        : "Your challenge: Walk 15 minutes in any direction. Find something interesting. Take a photo. You're the cartographer now."
-                      }
+                    <p style={{fontSize:14,color:T.gold,fontFamily:"'Courier Prime',monospace",lineHeight:1.8,fontWeight:700}}>
+                      {!getSC()||!destCoords?"↩ Go back and select from the suggestions.":"Walk 15 minutes in any direction. Find something. Take a photo. You're the cartographer now."}
                     </p>
-                    {(!getStartCoords() || !destCoords) && (
-                      <button onClick={handleReset} style={{
-                        padding: "10px 18px", fontSize: 12, fontWeight: 600, fontFamily: "'DM Mono', monospace",
-                        background: "rgba(255,215,0,0.1)", color: "#FFD700", border: "1px solid rgba(255,215,0,0.25)",
-                        borderRadius: 8, cursor: "pointer",
-                      }}>
-                        ← Go Back & Select Locations
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Discoveries — only when we have real data */}
-            {route.picks.length > 0 && (
-              <div style={{ marginBottom: 8 }}>
-                <p style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)", letterSpacing: 1, marginBottom: 12 }}>
-                  {route.picks.length} REAL DISCOVERIES • TAP TO EXPAND • 📸 TO UNLOCK NEXT
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {route.picks.map((d, i) => (
-                    <DiscoveryCard
-                      key={i} discovery={d} index={i}
-                      isActive={activeDisc === i}
-                      isLocked={i >= unlockedCount}
-                      isUnlocked={i < unlockedCount}
-                      proofImage={proofs[i]}
-                      onClick={() => i < unlockedCount && setActiveDisc(activeDisc === i ? null : i)}
-                      onProofVerified={(img) => setProofs(prev => ({ ...prev, [i]: img }))}
-                    />
-                  ))}
+            {/* Discoveries */}
+            {route.picks.length>0&&(
+              <div style={{marginBottom:12}}>
+                <p style={{fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700,marginBottom:14}}>{route.picks.length} DISCOVERIES · TAP TO EXPAND</p>
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  {route.picks.map((d,i)=><DiscoveryCard key={i} discovery={d} index={i} isActive={activeDisc===i} isLocked={i>=unlockedCount} proofImage={proofs[i]} onClick={()=>i<unlockedCount&&setActiveDisc(activeDisc===i?null:i)} onProofVerified={(img)=>setProofs(prev=>({...prev,[i]:img}))} />)}
                 </div>
               </div>
             )}
 
             {/* Actions */}
-            <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-              <button onClick={handleReshuffle} style={{ flex: 1, padding: "14px 20px", fontSize: 13, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif", background: `${vibeColor}15`, color: vibeColor, border: `1px solid ${vibeColor}33`, borderRadius: 10, cursor: "pointer", transition: "all 0.3s" }}>
-                🎲 Reshuffle
-              </button>
-              <button onClick={handleReset} style={{ flex: 1, padding: "14px 20px", fontSize: 13, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, cursor: "pointer", transition: "all 0.3s" }}>
-                ← Finish Route
-              </button>
+            <div style={{display:"flex",gap:12,marginTop:28}}>
+              <button className="hd-alt" onClick={handleReshuffle} style={{flex:1,padding:"16px",fontSize:15,fontWeight:700,fontFamily:"'Playfair Display',serif",background:"transparent",color:vibeColor,border:`2.5px solid ${vibeColor}`,cursor:"pointer",minHeight:54,transform:"rotate(0.4deg)",boxShadow:`2px 3px 0px ${vibeColor}30`}}>↻ Reshuffle</button>
+              <button className="hd" onClick={handleReset} style={{flex:1,padding:"16px",fontSize:15,fontWeight:700,fontFamily:"'Playfair Display',serif",background:T.ink,color:T.paper,border:`2.5px solid ${T.ink}`,cursor:"pointer",minHeight:54,transform:"rotate(-0.3deg)",boxShadow:`2px 3px 0px ${T.inkGhost}`}}>← New Route</button>
             </div>
 
-            {/* Anti-cloud notice */}
-            <div style={{ marginTop: 28, padding: "14px 18px", background: "rgba(255,107,53,0.04)", borderRadius: 10, border: "1px solid rgba(255,107,53,0.1)" }}>
-              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontFamily: "'DM Mono', monospace", lineHeight: 1.6 }}>
-                🗺️ <span style={{ color: "#FF6B35" }}>Anti-Cloud:</span> This route exists only on your device. No server. No backup. If you clear this page, it's gone — like a real memory.
-              </p>
+            <div style={{marginTop:28,padding:"14px 18px",borderLeft:`3px solid ${T.accent}`,fontFamily:"'Courier Prime',monospace",fontSize:12,color:T.inkFaint,lineHeight:1.8,fontStyle:"italic"}}>
+              🗺️ This route exists only on your device. No server. No backup. Close this tab and it's gone — like a real memory.
             </div>
           </div>
         )}
