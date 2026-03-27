@@ -23,7 +23,6 @@ const T = {
   industrialSoft: "rgba(107,107,107,0.1)",
   shadow: "rgba(44,36,22,0.18)",
   stain: "#6E4420",
-  // Heavy grain + foxing spots + uneven yellowing
   grain: `url("data:image/svg+xml,%3Csvg viewBox='0 0 600 600' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='6' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.09'/%3E%3Ccircle cx='120' cy='80' r='6' fill='%236E4420' opacity='0.12'/%3E%3Ccircle cx='480' cy='150' r='4' fill='%236E4420' opacity='0.1'/%3E%3Ccircle cx='350' cy='90' r='3' fill='%235C3A18' opacity='0.08'/%3E%3Ccircle cx='90' cy='320' r='5' fill='%236E4420' opacity='0.1'/%3E%3Ccircle cx='530' cy='400' r='7' fill='%235C3A18' opacity='0.09'/%3E%3Ccircle cx='200' cy='500' r='4' fill='%236E4420' opacity='0.11'/%3E%3Ccircle cx='420' cy='530' r='3' fill='%235C3A18' opacity='0.07'/%3E%3Ccircle cx='60' cy='180' r='2' fill='%236E4420' opacity='0.13'/%3E%3Ccircle cx='550' cy='250' r='5' fill='%236E4420' opacity='0.08'/%3E%3Ccircle cx='300' cy='350' r='2' fill='%235C3A18' opacity='0.06'/%3E%3Ccircle cx='150' cy='450' r='6' fill='%236E4420' opacity='0.07'/%3E%3Ccircle cx='470' cy='60' r='3' fill='%235C3A18' opacity='0.1'/%3E%3C/svg%3E")`,
 };
 
@@ -78,6 +77,38 @@ const antiCloud={_s:{},save(k,v){this._s[k]=JSON.stringify(v);},load(k){try{retu
 // ─── TOAST ───
 function Toast({message,type,onDismiss}){useEffect(()=>{const t=setTimeout(onDismiss,4000);return()=>clearTimeout(t);},[onDismiss]);const colors={error:{bg:"rgba(200,67,43,0.08)",border:T.accent,color:T.accent},success:{bg:T.tealSoft,border:T.teal,color:T.teal},warning:{bg:T.goldSoft,border:T.gold,color:T.gold}};const c=colors[type]||colors.warning;return(<div onClick={onDismiss} style={{position:"fixed",top:16,left:16,right:16,zIndex:999,padding:"14px 18px",background:c.bg,border:`1px solid ${c.border}`,borderRadius:4,fontFamily:"'Courier Prime',monospace",fontSize:13,color:c.color,animation:"fadeIn 0.3s ease",backdropFilter:"blur(8px)",boxShadow:`0 2px 12px ${T.shadow}`}}>{message}</div>);}
 
+// ─── HANDWRITTEN LOGO ───
+// Each letter gets its own tspan with a random vertical nudge so they bounce
+// along an uneven baseline — like scrawled in a notebook.
+const LETTER_OFFSETS = [0, -6, 3, -4, 5, -2, 7]; // per-letter y nudge
+function UnrouteLogo() {
+  const letters = "Unroute".split("");
+  const nudges  = [0, -7, 4, -3, 6, -1, 5];
+  const rotates = [-2, 1.5, -1, 2.5, -0.5, 2, -1.5];
+  return (
+    <svg
+      viewBox="0 0 310 72"
+      style={{ width: "100%", maxWidth: 310, display: "block", overflow: "visible" }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {letters.map((ch, i) => (
+        <text
+          key={i}
+          x={i * 42 + 8}
+          y={44 + nudges[i]}
+          fontFamily="'Caveat', cursive"
+          fontWeight="700"
+          fontSize="52"
+          fill={T.ink}
+          transform={`rotate(${rotates[i]}, ${i * 42 + 28}, ${44 + nudges[i]})`}
+        >
+          {ch}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
 // ─── PLACE AUTOCOMPLETE ───
 function PlaceAutocomplete({value,onChange,onSelect,placeholder,accentColor,resolvedPlace}){
   const[suggestions,setSuggestions]=useState([]);const[isOpen,setIsOpen]=useState(false);const[loading,setLoading]=useState(false);const debRef=useRef(null);const wrapRef=useRef(null);const clr=accentColor||T.teal;
@@ -120,16 +151,9 @@ function PlaceAutocomplete({value,onChange,onSelect,placeholder,accentColor,reso
 // ─── COMPONENTS ───
 function Stamp({children,color}){return <span style={{display:"inline-block",padding:"3px 10px",border:`2px solid ${color||T.accent}`,borderRadius:2,fontSize:10,fontFamily:"'Courier Prime',monospace",fontWeight:700,letterSpacing:1.5,color:color||T.accent,textTransform:"uppercase",transform:"rotate(-1deg)"}}>{children}</span>;}
 
-function DiscoveryCard({discovery,index,isActive,onClick,isLocked,proofImage,onProofVerified}){
+function DiscoveryCard({discovery,index,isActive,onClick,proofImage,onProofCapture}){
   const clr=VIBE_COLORS[discovery.vibe]||T.teal;
   const mapsUrl=discovery.lat&&discovery.lon?`https://www.google.com/maps/dir/?api=1&destination=${discovery.lat},${discovery.lon}&travelmode=walking`:null;
-  if(isLocked)return(
-    <div style={{padding:"18px 20px",background:`repeating-linear-gradient(45deg,transparent,transparent 10px,${T.inkGhost}22 10px,${T.inkGhost}22 11px)`,border:`1px dashed ${T.inkGhost}`,borderRadius:3,animation:`fadeIn 0.4s ease ${index*0.08}s both`,opacity:0.5}}>
-      <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <span style={{fontSize:22,opacity:0.3}}>🔒</span>
-        <div><span style={{fontSize:14,fontWeight:700,color:T.inkFaint,fontFamily:"'Playfair Display',serif"}}>Stop #{index+1}</span><p style={{margin:"2px 0 0",fontSize:12,color:T.inkFaint,fontFamily:"'Courier Prime',monospace",fontStyle:"italic"}}>Complete the previous challenge to reveal</p></div>
-      </div>
-    </div>);
   return(
     <div style={{padding:"20px",background:T.paper,border:`1.5px solid ${isActive?clr:T.inkGhost}`,borderRadius:2,borderLeft:`4px solid ${clr}`,transition:"all 0.3s ease",animation:`fadeIn 0.4s ease ${index*0.08}s both`,boxShadow:isActive?`2px 3px 12px ${T.shadow}, inset 0 0 20px rgba(139,105,20,0.02)`:`1px 1px 4px ${T.shadow}`,transform:`rotate(${(index%2===0?-0.3:0.2)}deg)`}}>
       <div onClick={onClick} style={{cursor:"pointer"}}>
@@ -147,23 +171,27 @@ function DiscoveryCard({discovery,index,isActive,onClick,isLocked,proofImage,onP
       </div>
       {isActive&&(
         <div style={{marginTop:14,paddingTop:14,borderTop:`1px dashed ${T.inkGhost}`}}>
-          {!proofImage?(
-            <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-              <span style={{fontSize:18}}>📸</span>
-              <div style={{flex:1}}>
-                <p style={{fontSize:12,fontFamily:"'Courier Prime',monospace",color:T.accent,margin:"0 0 10px",lineHeight:1.5,fontStyle:"italic"}}>{discovery.challenge}</p>
-                <input ref={el=>{if(el)el._fileRef=el;}} type="file" accept="image/*" capture="environment" onChange={(e)=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=(ev)=>{antiCloud.logProof();onProofVerified(ev.target.result);};r.readAsDataURL(f);}} style={{display:"none"}} id={`proof-${index}`} />
-                <label htmlFor={`proof-${index}`} style={{display:"inline-block",padding:"12px 18px",fontSize:12,fontWeight:700,fontFamily:"'Courier Prime',monospace",background:T.accentSoft,color:T.accent,border:`1.5px solid ${T.accent}`,borderRadius:3,cursor:"pointer",minHeight:44,lineHeight:"20px"}}>
-                  📷 TAKE PHOTO TO UNLOCK
-                </label>
-              </div>
+          {/* Challenge — always visible, photo is optional */}
+          <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:14}}>
+            <span style={{fontSize:18}}>📸</span>
+            <p style={{fontSize:12,fontFamily:"'Courier Prime',monospace",color:T.accent,margin:0,lineHeight:1.5,fontStyle:"italic"}}>{discovery.challenge}</p>
+          </div>
+
+          {/* Optional photo capture */}
+          {!proofImage ? (
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <input type="file" accept="image/*" capture="environment" onChange={(e)=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=(ev)=>{antiCloud.logProof();onProofCapture(ev.target.result);};r.readAsDataURL(f);}} style={{display:"none"}} id={`proof-${index}`} />
+              <label htmlFor={`proof-${index}`} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"10px 16px",fontSize:12,fontFamily:"'Courier Prime',monospace",background:"transparent",color:T.inkFaint,border:`1px dashed ${T.inkGhost}`,borderRadius:3,cursor:"pointer",minHeight:40}}>
+                📷 <span>Add photo (optional)</span>
+              </label>
             </div>
-          ):(
+          ) : (
             <div>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span>✅</span><Stamp color={T.teal}>VERIFIED</Stamp></div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span>✅</span><Stamp color={T.teal}>PHOTO ADDED</Stamp></div>
               <img src={proofImage} alt="Proof" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:3,border:`1px solid ${T.inkGhost}`}} />
             </div>
           )}
+
           {mapsUrl&&<a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{display:"block",marginTop:12,padding:"12px 16px",background:T.bg,border:`1px solid ${T.inkGhost}`,borderRadius:3,color:T.inkLight,fontSize:12,fontFamily:"'Courier Prime',monospace",textDecoration:"none",textAlign:"center",minHeight:44}}>🗺️ Open in Google Maps → walk there</a>}
         </div>
       )}
@@ -186,9 +214,7 @@ function RouteMap({discoveries,active,startLabel,vibeColor,unlockedCount}){
       <rect width="710" height="400" fill="#EDE4D3" />
       <rect width="710" height="400" fill="url(#dots)" />
       <rect width="710" height="400" fill="url(#mapVignette)" />
-      {/* Fold crease */}
       <line x1="355" y1="0" x2="355" y2="400" stroke="rgba(44,36,22,0.05)" strokeWidth="1" />
-      {/* Worn edge marks */}
       <rect x="0" y="0" width="710" height="3" fill="rgba(44,36,22,0.04)" />
       <rect x="0" y="397" width="710" height="3" fill="rgba(44,36,22,0.04)" />
       <line x1="20" y1="200" x2="690" y2="200" stroke={T.inkGhost} strokeWidth="1.5" strokeDasharray="6 4" />
@@ -200,8 +226,8 @@ function RouteMap({discoveries,active,startLabel,vibeColor,unlockedCount}){
       {sl&&<text x={st.x} y={st.y+22} textAnchor="middle" fill={T.inkFaint} fontSize="8" fontFamily="'Courier Prime',monospace">{sl}</text>}
       <circle cx={en.x} cy={en.y} r="8" fill={T.paper} stroke={T.accent} strokeWidth="2" />
       <text x={en.x} y={en.y+4} textAnchor="middle" fill={T.accent} fontSize="9" fontFamily="'Courier Prime',monospace" fontWeight="700">B</text>
-      {pts.map((p,i)=>{const dd=discoveries[i],c=VIBE_COLORS[dd.vibe]||mc,isA=active===i,isL=i>unlockedCount;return(
-        <g key={i} opacity={isL?0.25:1}>{isA&&!isL&&<circle cx={p.x} cy={p.y} r="16" fill="none" stroke={c} strokeWidth="1" strokeDasharray="3 2"><animate attributeName="r" values="14;20;14" dur="2s" repeatCount="indefinite" /></circle>}<circle cx={p.x} cy={p.y} r="12" fill={T.paper} stroke={isL?T.inkGhost:c} strokeWidth={isA?2:1.5} /><text x={p.x} y={p.y+5} textAnchor="middle" fontSize="12">{isL?"?":dd.icon}</text></g>
+      {pts.map((p,i)=>{const dd=discoveries[i],c=VIBE_COLORS[dd.vibe]||mc,isA=active===i,isL=false;return(
+        <g key={i} opacity={isL?0.25:1}>{isA&&<circle cx={p.x} cy={p.y} r="16" fill="none" stroke={c} strokeWidth="1" strokeDasharray="3 2"><animate attributeName="r" values="14;20;14" dur="2s" repeatCount="indefinite" /></circle>}<circle cx={p.x} cy={p.y} r="12" fill={T.paper} stroke={c} strokeWidth={isA?2:1.5} /><text x={p.x} y={p.y+5} textAnchor="middle" fontSize="12">{dd.icon}</text></g>
       );})}
       <style>{`@keyframes drawPath{from{stroke-dashoffset:1200;}to{stroke-dashoffset:0;}}`}</style>
     </svg>);
@@ -213,7 +239,6 @@ export default function Unroute(){
 
   useEffect(()=>{if(geo.status==="denied"||geo.status==="unsupported")setUseManual(true);},[geo.status]);
   useEffect(()=>{topRef.current?.scrollIntoView({behavior:"smooth"});},[phase]);
-  const unlockedCount=useMemo(()=>{if(!route)return 0;let c=0;for(let i=0;i<route.picks.length;i++){if(i===0||proofs[i-1])c=i+1;else break;}return c;},[route,proofs]);
 
   const msgs=["Avoiding the fastest route…","Querying OpenStreetMap…","Finding real places you've ignored…","Filtering out the boring chains…","Calculating serendipity…","Asking a local cat for directions…","Writing AI descriptions…","Almost there…"];
   const getSC=()=>{if(useManual&&startCoords)return startCoords;if(!useManual&&geo.coords)return{lat:geo.coords.lat,lng:geo.coords.lng};return null;};
@@ -238,59 +263,33 @@ export default function Unroute(){
   return(
     <div style={{minHeight:"100dvh",background:T.bg,backgroundImage:T.grain,backgroundSize:"600px 600px",fontFamily:"'Playfair Display',Georgia,serif",color:T.ink,position:"relative"}}>
 
-      {/* ── HEAVY WEATHERING OVERLAYS ── */}
-
-      {/* Dark edge vignette — much stronger, like the photo */}
+      {/* ── WEATHERING OVERLAYS ── */}
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:2,background:"radial-gradient(ellipse at center, transparent 35%, rgba(110,68,32,0.1) 55%, rgba(60,35,12,0.22) 75%, rgba(35,20,5,0.35) 100%)"}} />
-
-      {/* Top edge — heavy brown staining */}
       <div style={{position:"fixed",top:0,left:0,right:0,height:180,pointerEvents:"none",zIndex:2,background:"linear-gradient(to bottom, rgba(60,30,8,0.18) 0%, rgba(90,55,20,0.08) 40%, transparent 100%)"}} />
-
-      {/* Bottom edge — heavy brown staining */}
       <div style={{position:"fixed",bottom:0,left:0,right:0,height:160,pointerEvents:"none",zIndex:2,background:"linear-gradient(to top, rgba(60,30,8,0.16) 0%, rgba(90,55,20,0.06) 40%, transparent 100%)"}} />
-
-      {/* Left edge staining */}
       <div style={{position:"fixed",top:0,left:0,bottom:0,width:80,pointerEvents:"none",zIndex:2,background:"linear-gradient(to right, rgba(60,30,8,0.14) 0%, rgba(90,55,20,0.04) 60%, transparent 100%)"}} />
-
-      {/* Right edge staining */}
       <div style={{position:"fixed",top:0,right:0,bottom:0,width:80,pointerEvents:"none",zIndex:2,background:"linear-gradient(to left, rgba(60,30,8,0.14) 0%, rgba(90,55,20,0.04) 60%, transparent 100%)"}} />
-
-      {/* Corner stains — darker in all four corners like the diary */}
       <div style={{position:"fixed",top:0,left:0,width:200,height:200,pointerEvents:"none",zIndex:2,background:"radial-gradient(circle at 0% 0%, rgba(50,25,5,0.2) 0%, transparent 70%)"}} />
       <div style={{position:"fixed",top:0,right:0,width:200,height:200,pointerEvents:"none",zIndex:2,background:"radial-gradient(circle at 100% 0%, rgba(50,25,5,0.18) 0%, transparent 70%)"}} />
       <div style={{position:"fixed",bottom:0,left:0,width:200,height:200,pointerEvents:"none",zIndex:2,background:"radial-gradient(circle at 0% 100%, rgba(50,25,5,0.2) 0%, transparent 70%)"}} />
       <div style={{position:"fixed",bottom:0,right:0,width:200,height:200,pointerEvents:"none",zIndex:2,background:"radial-gradient(circle at 100% 100%, rgba(50,25,5,0.18) 0%, transparent 70%)"}} />
-
-      {/* Notebook ruled lines */}
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:1,backgroundImage:`repeating-linear-gradient(to bottom, transparent, transparent 31px, rgba(110,68,32,0.08) 31px, rgba(110,68,32,0.08) 32px)`,backgroundSize:"100% 32px"}} />
-
-      {/* Big water/coffee stain — top right */}
       <div style={{position:"fixed",top:30,right:-30,width:200,height:200,borderRadius:"50%",pointerEvents:"none",zIndex:2,background:"radial-gradient(circle, rgba(110,68,32,0.06) 30%, rgba(110,68,32,0.12) 60%, transparent 70%)"}} />
       <div style={{position:"fixed",top:40,right:-20,width:180,height:180,borderRadius:"50%",border:"2px solid rgba(110,68,32,0.06)",pointerEvents:"none",zIndex:2}} />
-
-      {/* Smaller stain — bottom left */}
       <div style={{position:"fixed",bottom:100,left:20,width:120,height:120,borderRadius:"50%",pointerEvents:"none",zIndex:2,background:"radial-gradient(circle, rgba(110,68,32,0.04) 40%, rgba(110,68,32,0.08) 65%, transparent 75%)"}} />
-
-      {/* Scratch mark — diagonal line like in the diary photo */}
       <div style={{position:"fixed",top:"55%",right:"15%",width:80,height:1,pointerEvents:"none",zIndex:2,background:T.inkGhost,transform:"rotate(-25deg)",opacity:0.3}} />
       <div style={{position:"fixed",top:"56%",right:"14%",width:50,height:1,pointerEvents:"none",zIndex:2,background:T.inkGhost,transform:"rotate(-35deg)",opacity:0.2}} />
-
-      {/* Ink splatters & foxing spots — scattered dark brown dots */}
       <div style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:1,overflow:"hidden"}}>
-        {/* Large organic ink blob */}
         <svg style={{position:"absolute",top:"6%",left:"-2%",width:140,height:140,opacity:0.15,transform:"rotate(35deg)"}} viewBox="0 0 100 100" fill={T.stain}>
           <path d="M45,20 C55,15 65,30 50,45 C70,40 80,60 60,65 C70,80 50,90 40,70 C20,80 15,60 30,50 C10,40 20,20 40,30 Z" />
           <circle cx="18" cy="18" r="3" /><circle cx="80" cy="25" r="2" /><circle cx="75" cy="80" r="3.5" />
         </svg>
-        {/* Spray of small foxing dots */}
         <svg style={{position:"absolute",top:"35%",right:"5%",width:90,height:90,opacity:0.12}} viewBox="0 0 100 100" fill={T.stain}>
           <circle cx="50" cy="50" r="5" /><circle cx="25" cy="35" r="3" /><circle cx="72" cy="62" r="2" /><circle cx="58" cy="22" r="1.5" /><circle cx="38" cy="75" r="4" /><circle cx="82" cy="42" r="1.5" /><circle cx="15" cy="68" r="2.5" /><circle cx="65" cy="85" r="1" />
         </svg>
-        {/* Smear mark */}
         <svg style={{position:"absolute",bottom:"12%",left:"6%",width:120,height:50,opacity:0.12,transform:"rotate(-10deg)"}} viewBox="0 0 100 50" fill={T.stain}>
           <path d="M10,25 C30,12 70,38 90,25 C80,42 40,18 20,42 Z" /><circle cx="12" cy="10" r="2" /><circle cx="90" cy="40" r="1.5" />
         </svg>
-        {/* Extra foxing scatter */}
         <svg style={{position:"absolute",top:"70%",left:"40%",width:60,height:60,opacity:0.1}} viewBox="0 0 100 100" fill={T.stain}>
           <circle cx="20" cy="30" r="3" /><circle cx="60" cy="20" r="2" /><circle cx="80" cy="70" r="4" /><circle cx="40" cy="80" r="2" /><circle cx="10" cy="65" r="1.5" />
         </svg>
@@ -325,9 +324,9 @@ export default function Unroute(){
 
         {/* ── HEADER ── */}
         <div style={{marginBottom:32,animation:"fadeIn 0.6s ease"}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:8}}>
-            <h1 style={{fontSize:38,fontWeight:900,letterSpacing:-1,color:T.ink,fontStyle:"italic"}}>Unroute</h1>
-            <span style={{fontSize:18,opacity:0.5}}>🧭</span>
+          {/* Squiggly SVG logo */}
+          <div style={{marginBottom:10}}>
+            <UnrouteLogo />
           </div>
           <p style={{fontSize:15,color:T.inkLight,fontFamily:"'Courier Prime',monospace",maxWidth:380,lineHeight:1.7,marginBottom:14}}>
             The intentionally inefficient route planner.<br/>Get lost safely. Find what you weren't looking for.
@@ -401,7 +400,7 @@ export default function Unroute(){
             </button>
 
             <div style={{marginTop:24,padding:"14px 18px",borderLeft:`3px solid ${T.inkGhost}`,fontFamily:"'Courier Prime',monospace",fontSize:12,color:T.inkFaint,lineHeight:1.8,fontStyle:"italic"}}>
-              Routes unlock step-by-step — prove you found each stop to see the next. Real places from OpenStreetMap. AI descriptions when available. Everything stays on your device.
+              Tap any stop to expand it. Real places from OpenStreetMap. AI descriptions when available. Photos are optional — just for fun. Everything stays on your device.
             </div>
           </div>
         )}
@@ -423,7 +422,6 @@ export default function Unroute(){
           <div style={{animation:"fadeIn 0.5s ease"}}>
             {/* Header card */}
             <div style={{padding:"24px",marginBottom:24,background:T.paper,border:`1.5px solid ${T.inkGhost}`,borderRadius:2,boxShadow:`2px 3px 12px ${T.shadow}, inset 0 0 30px rgba(139,105,20,0.02)`,position:"relative",overflow:"hidden"}}>
-              {/* Subtle aged corner */}
               <div style={{position:"absolute",top:0,right:0,width:40,height:40,background:"linear-gradient(135deg, transparent 50%, rgba(44,36,22,0.03) 50%)",pointerEvents:"none"}} />
               <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}}>
                 <Stamp color={vibeColor}>{VIBE_ROUTES[vibeKey]?.label}</Stamp>
@@ -444,13 +442,13 @@ export default function Unroute(){
               {route.picks.length>0&&(
                 <div style={{marginTop:14}}>
                   <div style={{height:3,background:T.inkGhost,borderRadius:1,overflow:"hidden"}}><div style={{height:"100%",background:vibeColor,borderRadius:1,transition:"width 0.5s",width:`${(Object.keys(proofs).length/route.picks.length)*100}%`}} /></div>
-                  <p style={{fontSize:10,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,marginTop:6}}>{Object.keys(proofs).length} of {route.picks.length} verified</p>
+                  <p style={{fontSize:10,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,marginTop:6}}>{Object.keys(proofs).length} photos · {route.picks.length} stops</p>
                 </div>
               )}
             </div>
 
             {/* Map */}
-            {route.picks.length>0&&<div style={{marginBottom:24,borderRadius:3,overflow:"hidden",border:`1.5px solid ${T.inkGhost}`,boxShadow:`0 2px 8px ${T.shadow}`}}><RouteMap discoveries={route.picks} active={activeDisc} startLabel={startLabel} vibeColor={vibeColor} unlockedCount={unlockedCount} /></div>}
+            {route.picks.length>0&&<div style={{marginBottom:24,borderRadius:3,overflow:"hidden",border:`1.5px solid ${T.inkGhost}`,boxShadow:`0 2px 8px ${T.shadow}`}}><RouteMap discoveries={route.picks} active={activeDisc} startLabel={startLabel} vibeColor={vibeColor} unlockedCount={route.picks.length} /></div>}
 
             {/* Pioneer */}
             {route.isPioneer&&(
@@ -475,7 +473,7 @@ export default function Unroute(){
               <div style={{marginBottom:12}}>
                 <p style={{fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700,marginBottom:14}}>{route.picks.length} DISCOVERIES · TAP TO EXPAND</p>
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  {route.picks.map((d,i)=><DiscoveryCard key={i} discovery={d} index={i} isActive={activeDisc===i} isLocked={i>=unlockedCount} proofImage={proofs[i]} onClick={()=>i<unlockedCount&&setActiveDisc(activeDisc===i?null:i)} onProofVerified={(img)=>setProofs(prev=>({...prev,[i]:img}))} />)}
+                  {route.picks.map((d,i)=><DiscoveryCard key={i} discovery={d} index={i} isActive={activeDisc===i} proofImage={proofs[i]} onClick={()=>setActiveDisc(activeDisc===i?null:i)} onProofCapture={(img)=>setProofs(prev=>({...prev,[i]:img}))} />)}
                 </div>
               </div>
             )}
