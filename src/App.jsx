@@ -62,97 +62,12 @@ function osmToDiscovery(el){const t=el.tags||{},v=classifyElement(el),cfg=OSM_VI
 const CHAINS=["starbucks","costa","pret","mcdonald","burger king","kfc","subway","greggs","nando","pizza hut","domino","tesco","sainsbury","asda","lidl","aldi","waitrose","boots","superdrug","poundland","primark","five guys","wagamama","caffe nero"];
 function isChain(n){return CHAINS.some(c=>(n||"").toLowerCase().includes(c));}
 
-// ─── CONFIG ───
-const FOURSQUARE_KEY = "UWPTAXF2FCTPQ1KMQANE0SARVIPS0RVE40T0ZFB3O5LLWIZB"; // ← paste your key here
+async function fetchRealDiscoveries(sc,ec,v,count){const pad=0.005,s=Math.min(sc.lat,ec.lat)-pad,n=Math.max(sc.lat,ec.lat)+pad,w=Math.min(sc.lng,ec.lng)-pad,e=Math.max(sc.lng,ec.lng)+pad;const q=buildOverpassQuery(s,w,n,e,v);const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:`data=${encodeURIComponent(q)}`});if(!r.ok)throw new Error(`Overpass ${r.status}`);const d=await r.json();if(!d.elements?.length)return null;let disc=d.elements.filter(x=>x.lat||x.center?.lat).map(osmToDiscovery).filter(x=>!isChain(x.name));const named=disc.filter(x=>!x.name.startsWith("Unnamed")),unnamed=disc.filter(x=>x.name.startsWith("Unnamed"));let pool=v==="any"?[...named,...unnamed]:[...named.filter(x=>x.vibe===v),...unnamed.filter(x=>x.vibe===v),...named,...unnamed];const seen=new Set();pool=pool.filter(x=>{if(seen.has(x.name))return false;seen.add(x.name);return true;});return seededShuffle(pool,Date.now()%10000).slice(0,count);}
 
-// Haversine distance in km
-function haversineDist(a,b){const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lng-a.lng)*Math.PI/180,x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+async function enhanceWithAI(discoveries){const toE=discoveries.filter(d=>d.name&&!d.name.startsWith("Unnamed"));if(!toE.length)return discoveries;const prompt=toE.map((d,i)=>`${i+1}. "${d.name}" — ${d.type}. ${d.desc}. Vibe: ${d.vibe}.`).join("\n");try{const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`You write for Unroute, a scavenger-hunt app for urban explorers. Your voice: a well-traveled friend scribbling notes in a Moleskine. Witty, specific, never generic.\n\nReturn ONLY a JSON array. No markdown. Each: {"desc":"1 quirky sentence","challenge":"1 sentence photo task requiring presence"}\n\nNever say "hidden gem", "capture the essence", "explore", or "discover". Under 15 words each.`,messages:[{role:"user",content:`Write for these ${toE.length} real places:\n${prompt}`}]})});const d=await r.json(),txt=d.content?.map(c=>c.text||"").join("")||"",enhanced=JSON.parse(txt.replace(/```json|```/g,"").trim());return discoveries.map(x=>{const i=toE.findIndex(t=>t.name===x.name);if(i>=0&&enhanced[i])return{...x,desc:enhanced[i].desc||x.desc,challenge:enhanced[i].challenge||x.challenge,aiEnhanced:true};return x;});}catch(e){console.warn("AI failed:",e.message);return discoveries;}}
 
-// ─── FOURSQUARE FETCH ───
-const FSQ_CATEGORIES={any:"10000,16000,13000,14000,17000",neon:"13000,10000,17000",green:"16000,14000",industrial:"10000,14000,17000"};
+async function generateRouteAsync(level,vibeKey,sC,dC){const count=Math.max(2,Math.min(level,8)),names=ROUTE_NAMES[vibeKey]||ROUTE_NAMES.any,name=names[Math.floor(Math.random()*names.length)];let picks=null,isReal=false,isPioneer=false;if(sC&&dC){try{picks=await fetchRealDiscoveries(sC,dC,vibeKey,count);if(picks?.length>=2){isReal=true;picks=await enhanceWithAI(picks);}else{isPioneer=true;picks=[];}}catch(e){console.warn("Overpass:",e.message);isPioneer=true;picks=[];}}else{isPioneer=true;picks=[];}const extraMin=picks.length?picks.reduce((s,d)=>s+parseInt(d.time),0):0;let baseDist,routeDist;if(sC&&dC){const R=6371,dLat=(dC.lat-sC.lat)*Math.PI/180,dLon=(dC.lng-sC.lng)*Math.PI/180,a=Math.sin(dLat/2)**2+Math.cos(sC.lat*Math.PI/180)*Math.cos(dC.lat*Math.PI/180)*Math.sin(dLon/2)**2;baseDist=Math.max(0.3,R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*1.3).toFixed(1);routeDist=picks.length?(parseFloat(baseDist)*(1+level*0.12)).toFixed(1):baseDist;}else{baseDist="?";routeDist="?";}return{picks,extraMin,baseDist,routeDist,name,vibeKey,isReal,isPioneer};}
 
-async function fetchFoursquarePlaces(sc,ec,vibeKey,limit=40){
-  if(!FOURSQUARE_KEY||FOURSQUARE_KEY.includes("YOUR_"))return[];
-  const lat=(sc.lat+ec.lat)/2,lng=(sc.lng+ec.lng)/2;
-  const radiusM=Math.min(Math.round(haversineDist(sc,{lat:ec.lat,lng:ec.lng})*1000*0.8),5000);
-  const cats=FSQ_CATEGORIES[vibeKey]||FSQ_CATEGORIES.any;
-  try{
-    const r=await fetch(`https://api.foursquare.com/v3/places/search?ll=${lat},${lng}&radius=${radiusM}&categories=${cats}&limit=${limit}&fields=name,location,categories,geocodes,rating,stats,description`,{headers:{Authorization:FOURSQUARE_KEY,Accept:"application/json"}});
-    if(!r.ok)return[];
-    const d=await r.json();
-    return(d.results||[]).filter(p=>!isChain(p.name)).map(p=>{
-      const lat=p.geocodes?.main?.latitude,lon=p.geocodes?.main?.longitude;
-      const cat=p.categories?.[0]?.name||"place";
-      const vibe=vibeKey==="any"?"neon":vibeKey;
-      const cfg=OSM_VIBE_MAP[vibe]||OSM_VIBE_MAP.neon;
-      return{type:cat,icon:pickIcon({amenity:cat.toLowerCase(),shop:cat.toLowerCase()}),name:p.name.length>35?p.name.slice(0,33)+"...":p.name,desc:p.description||`${cat} · ${p.location?.neighborhood||p.location?.locality||""}`.trim().replace(/^· /,""),vibe,time:`+${Math.floor(Math.random()*6)+2} min`,challenge:cfg.challenges[Math.floor(Math.random()*cfg.challenges.length)],lat,lon,source:"foursquare",fsqRating:p.rating||0};
-    }).filter(p=>p.lat&&p.lon);
-  }catch(e){console.warn("Foursquare failed:",e.message);return[];}
-}
-
-// ─── AI CURATION — picks best places BEFORE description enhancement ───
-async function curateWithAI(candidates,count){
-  if(candidates.length<=count)return candidates;
-  const list=candidates.map((p,i)=>`${i}. "${p.name}" [${p.source||"osm"}] ${p.type}. ${(p.desc||"").slice(0,60)}`).join("\n");
-  try{
-    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:200,system:`You curate stops for Unroute, an urban exploration walking app. Pick the ${count} most genuinely interesting places from the list. Prefer: independent/local, unusual, photogenic, characterful, unexpected. Avoid: generic amenities, corporate, boring, duplicate types. Return ONLY a JSON array of index numbers. Example: [3,7,1,9,2]. No explanation.`,messages:[{role:"user",content:`Pick best ${count} from ${candidates.length} candidates:\n${list}`}]})});
-    const d=await r.json();
-    const txt=d.content?.map(x=>x.text||"").join("")||"";
-    const indices=JSON.parse(txt.replace(/```json|```/g,"").trim());
-    if(!Array.isArray(indices)||indices.length<2)throw new Error("bad");
-    const picked=indices.slice(0,count).map(i=>candidates[i]).filter(Boolean);
-    if(picked.length<2)throw new Error("too few");
-    return picked;
-  }catch(e){console.warn("AI curation failed, using spread:",e.message);return candidates.slice(0,count);}
-}
-
-// ─── AI DESCRIPTION ENHANCEMENT ───
-async function enhanceWithAI(discoveries){
-  const toE=discoveries.filter(d=>d.name&&!d.name.startsWith("Unnamed"));
-  if(!toE.length)return discoveries;
-  const prompt=toE.map((d,i)=>`${i+1}. "${d.name}" — ${d.type}. ${d.desc}. Vibe: ${d.vibe}.`).join("\n");
-  try{
-    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`You write for Unroute, a scavenger-hunt app for urban explorers. Your voice: a well-traveled friend scribbling notes in a Moleskine. Witty, specific, never generic.\n\nReturn ONLY a JSON array. No markdown. Each: {"desc":"1 quirky sentence","challenge":"1 sentence photo task requiring presence"}\n\nNever say "hidden gem", "capture the essence", "explore", or "discover". Under 15 words each.`,messages:[{role:"user",content:`Write for these ${toE.length} real places:\n${prompt}`}]})});
-    const d=await r.json(),txt=d.content?.map(x=>x.text||"").join("")||"",enhanced=JSON.parse(txt.replace(/```json|```/g,"").trim());
-    return discoveries.map(x=>{const i=toE.findIndex(t=>t.name===x.name);if(i>=0&&enhanced[i])return{...x,desc:enhanced[i].desc||x.desc,challenge:enhanced[i].challenge||x.challenge,aiEnhanced:true};return x;});
-  }catch(e){console.warn("AI enhance failed:",e.message);return discoveries;}
-}
-
-// ─── MERGED FETCH: OSM + Foursquare → AI curation → AI descriptions ───
-async function fetchRealDiscoveries(sc,ec,v,count){
-  const pad=0.005,s=Math.min(sc.lat,ec.lat)-pad,n=Math.max(sc.lat,ec.lat)+pad,w=Math.min(sc.lng,ec.lng)-pad,e=Math.max(sc.lng,ec.lng)+pad;
-  const[osmRaw,fsqRaw]=await Promise.all([
-    (async()=>{try{const q=buildOverpassQuery(s,w,n,e,v);const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:`data=${encodeURIComponent(q)}`});if(!r.ok)return[];const d=await r.json();return(d.elements||[]).filter(x=>x.lat||x.center?.lat).map(osmToDiscovery).filter(x=>!isChain(x.name));}catch{return[];}})(),
-    fetchFoursquarePlaces(sc,ec,v,40),
-  ]);
-  const seen=new Set();
-  const dedup=(arr)=>arr.filter(x=>{if(!x.lat||!x.lon)return false;const k=x.name.toLowerCase().replace(/\W/g,"").slice(0,10);if(seen.has(k))return false;seen.add(k);return true;});
-  // Green/industrial: OSM first (better outdoor/structural data); neon/any: Foursquare first
-  const pool=v==="green"||v==="industrial"
-    ?dedup([...osmRaw.filter(x=>!x.name.startsWith("Unnamed")),...fsqRaw,...osmRaw.filter(x=>x.name.startsWith("Unnamed"))])
-    :dedup([...fsqRaw,...osmRaw.filter(x=>!x.name.startsWith("Unnamed")),...osmRaw.filter(x=>x.name.startsWith("Unnamed"))]);
-  if(!pool.length)return null;
-  // Sort along journey axis
-  const totalDist=haversineDist(sc,{lat:ec.lat,lng:ec.lng})||1;
-  const jitter=Date.now()%1000/1000;
-  const sorted=pool.map(x=>({...x,_score:haversineDist(sc,{lat:x.lat,lng:x.lon})/totalDist+(Math.sin(x.lat*997+x.lon*1009+jitter)*0.04)})).sort((a,b)=>a._score-b._score);
-  // Spread evenly across the route to give AI a representative sample
-  const spreadN=Math.min(sorted.length,count*4);
-  const step=(sorted.length-1)/Math.max(spreadN-1,1);
-  const spread=Array.from({length:spreadN},(_,i)=>sorted[Math.round(i*step)]);
-  // AI picks the genuinely interesting ones
-  return await curateWithAI(spread,count);
-}
-
-async function generateRouteAsync(level,vibeKey,sC,dC){
-  const count=Math.max(2,Math.min(level,8)),names=ROUTE_NAMES[vibeKey]||ROUTE_NAMES.any,name=names[Math.floor(Math.random()*names.length)];
-  let picks=null,isReal=false,isPioneer=false;
-  if(sC&&dC){try{picks=await fetchRealDiscoveries(sC,dC,vibeKey,count);if(picks?.length>=2){isReal=true;picks=await enhanceWithAI(picks);}else{isPioneer=true;picks=[];}}catch(e){console.warn("Fetch failed:",e.message);isPioneer=true;picks=[];}}else{isPioneer=true;picks=[];}
-  const extraMin=picks.length?picks.reduce((s,d)=>s+parseInt(d.time),0):0;
-  let baseDist,routeDist;
-  if(sC&&dC){const R=6371,dLat=(dC.lat-sC.lat)*Math.PI/180,dLon=(dC.lng-sC.lng)*Math.PI/180,a=Math.sin(dLat/2)**2+Math.cos(sC.lat*Math.PI/180)*Math.cos(dC.lat*Math.PI/180)*Math.sin(dLon/2)**2;baseDist=Math.max(0.3,R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*1.3).toFixed(1);routeDist=picks.length?(parseFloat(baseDist)*(1+level*0.12)).toFixed(1):baseDist;}else{baseDist="?";routeDist="?";}
-  return{picks,extraMin,baseDist,routeDist,name,vibeKey,isReal,isPioneer};
-}
 // ─── GEOLOCATION ───
 function useGeolocation(){const[loc,setLoc]=useState({status:"idle",coords:null,address:null});useEffect(()=>{if(!navigator.geolocation){setLoc(p=>({...p,status:"unsupported"}));return;}setLoc(p=>({...p,status:"requesting"}));navigator.geolocation.getCurrentPosition(async(pos)=>{const c={lat:pos.coords.latitude,lng:pos.coords.longitude};setLoc(p=>({...p,status:"located",coords:c}));try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${c.lat}&lon=${c.lng}&format=json&zoom=16&addressdetails=1`,{headers:{"Accept-Language":"en"}});const d=await r.json(),a=d.address||{};setLoc(p=>({...p,address:a.road?`${a.road}${a.suburb?", "+a.suburb:""}${a.city||a.town?", "+(a.city||a.town):""}`:d.display_name?.split(",").slice(0,3).join(",")||"Your location"}));}catch{setLoc(p=>({...p,address:`${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`}));}},()=>setLoc(p=>({...p,status:"denied"})),{enableHighAccuracy:true,timeout:10000,maximumAge:60000});},[]);return loc;}
 
@@ -236,84 +151,11 @@ function PlaceAutocomplete({value,onChange,onSelect,placeholder,accentColor,reso
 // ─── COMPONENTS ───
 function Stamp({children,color}){return <span style={{display:"inline-block",padding:"3px 10px",border:`2px solid ${color||T.accent}`,borderRadius:2,fontSize:10,fontFamily:"'Courier Prime',monospace",fontWeight:700,letterSpacing:1.5,color:color||T.accent,textTransform:"uppercase",transform:"rotate(-1deg)"}}>{children}</span>;}
 
-// ─── ROUGH BOX ───
-// Draws a hand-sketched border around children. Each call gets unique randomness
-// so no two boxes look alike. Corners don't quite meet, edges wobble slightly.
-function roughPath(x,y,w,h,seed){
-  let s=seed+1;
-  const rnd=()=>{s=(s*16807+7)%2147483647;return(s%1000)/1000;};
-  const jit=()=>(rnd()-0.5)*9; // big wobble ±4.5px
-  // Massive corner gaps — 12 to 28px — very obviously disconnected
-  const g=()=>12+rnd()*16;
-  const tl=g(),tr=g(),br=g(),bl=g();
-  // Each side broken into 3 segments with mid-point wobble so lines bow slightly
-  const midJit=()=>(rnd()-0.5)*6;
-  // top
-  const tx1=x+tl+jit(), ty1=y+jit();
-  const tx2=x+w/2+midJit(), ty2=y+midJit();
-  const tx3=x+w-tr+jit(), ty3=y+jit();
-  const top=`M ${tx1} ${ty1} Q ${tx2} ${ty2} ${tx3} ${ty3}`;
-  // right
-  const rx1=x+w+jit(), ry1=y+tr+jit();
-  const rx2=x+w+midJit(), ry2=y+h/2+midJit();
-  const rx3=x+w+jit(), ry3=y+h-br+jit();
-  const right=`M ${rx1} ${ry1} Q ${rx2} ${ry2} ${rx3} ${ry3}`;
-  // bottom (right to left)
-  const bx1=x+w-br+jit(), by1=y+h+jit();
-  const bx2=x+w/2+midJit(), by2=y+h+midJit();
-  const bx3=x+bl+jit(), by3=y+h+jit();
-  const bottom=`M ${bx1} ${by1} Q ${bx2} ${by2} ${bx3} ${by3}`;
-  // left
-  const lx1=x+jit(), ly1=y+h-bl+jit();
-  const lx2=x+midJit(), ly2=y+h/2+midJit();
-  const lx3=x+jit(), ly3=y+tl+jit();
-  const left=`M ${lx1} ${ly1} Q ${lx2} ${ly2} ${lx3} ${ly3}`;
-  return [top,right,bottom,left];
-}
-
-function RoughBox({children,color,style,seed=42}){
-  const [sz,setSz]=useState({w:0,h:0});
-  const ref=useRef(null);
-  useEffect(()=>{
-    if(!ref.current)return;
-    const obs=new ResizeObserver(([e])=>{
-      setSz({w:Math.round(e.contentRect.width),h:Math.round(e.contentRect.height)});
-    });
-    obs.observe(ref.current);
-    return()=>obs.disconnect();
-  },[]);
-  const pad=16;
-  const W=sz.w+(pad*2), H=sz.h+(pad*2);
-  const paths=sz.w>0?roughPath(1,1,W-2,H-2,seed):[];
-  const strokeColor=color||T.inkGhost;
-  // Each side gets a noticeably different weight — 1 to 2.8px
-  let sv=seed+99; const sv_rnd=()=>{sv=(sv*16807+7)%2147483647;return(sv%1000)/1000;};
-  const widths=[1+sv_rnd()*1.8, 1+sv_rnd()*1.8, 1+sv_rnd()*1.8, 1+sv_rnd()*1.8];
-  return(
-    <div style={{position:"relative",...style}}>
-      {sz.w>0&&(
-        <svg
-          style={{position:"absolute",top:-pad,left:-pad,pointerEvents:"none",overflow:"visible"}}
-          width={W} height={H}
-        >
-          {paths.map((d,i)=>(
-            <path key={i} d={d} fill="none" stroke={strokeColor} strokeWidth={widths[i]}
-              strokeLinecap="round" strokeLinejoin="round"
-            />
-          ))}
-        </svg>
-      )}
-      <div ref={ref}>{children}</div>
-    </div>
-  );
-}
-
-
 function DiscoveryCard({discovery,index,isActive,onClick,proofImage,onProofCapture}){
   const clr=VIBE_COLORS[discovery.vibe]||T.teal;
   const mapsUrl=discovery.lat&&discovery.lon?`https://www.google.com/maps/dir/?api=1&destination=${discovery.lat},${discovery.lon}&travelmode=walking`:null;
   return(
-    <RoughBox color={isActive?clr:T.inkGhost} seed={index*317+7} style={{background:T.paper,transition:"all 0.3s ease",animation:`fadeIn 0.4s ease ${index*0.08}s both`,boxShadow:isActive?`2px 3px 12px ${T.shadow}`:`1px 1px 4px ${T.shadow}`,transform:`rotate(${(index%2===0?-0.3:0.2)}deg)`,borderLeft:`3px solid ${clr}`,padding:"20px"}}>
+    <div style={{padding:"20px",background:T.paper,border:`1.5px solid ${isActive?clr:T.inkGhost}`,borderRadius:2,borderLeft:`4px solid ${clr}`,transition:"all 0.3s ease",animation:`fadeIn 0.4s ease ${index*0.08}s both`,boxShadow:isActive?`2px 3px 12px ${T.shadow}, inset 0 0 20px rgba(139,105,20,0.02)`:`1px 1px 4px ${T.shadow}`,transform:`rotate(${(index%2===0?-0.3:0.2)}deg)`}}>
       <div onClick={onClick} style={{cursor:"pointer"}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:14}}>
           <span style={{fontSize:28,lineHeight:1}}>{discovery.icon}</span>
@@ -353,7 +195,7 @@ function DiscoveryCard({discovery,index,isActive,onClick,proofImage,onProofCaptu
           {mapsUrl&&<a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{display:"block",marginTop:12,padding:"12px 16px",background:T.bg,border:`1px solid ${T.inkGhost}`,borderRadius:3,color:T.inkLight,fontSize:12,fontFamily:"'Courier Prime',monospace",textDecoration:"none",textAlign:"center",minHeight:44}}>🗺️ Open in Google Maps → walk there</a>}
         </div>
       )}
-    </RoughBox>);
+    </div>);
 }
 
 function RouteMap({discoveries,active,startLabel,vibeColor,unlockedCount}){
@@ -496,12 +338,12 @@ export default function Unroute(){
 
         {/* ── TREASURE MAP ── */}
         {antiCloud.routeCount>0&&(
-          <RoughBox color={T.inkGhost} seed={91} style={{marginBottom:28,background:T.paper,boxShadow:`2px 2px 8px ${T.shadow}`,transform:"rotate(-0.2deg)",padding:"18px 22px"}}>
+          <div style={{padding:"18px 22px",background:T.paper,border:`1.5px solid ${T.inkGhost}`,borderRadius:2,marginBottom:28,boxShadow:`2px 2px 8px ${T.shadow}, inset 0 0 20px rgba(139,105,20,0.02)`,transform:"rotate(-0.2deg)"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}><span style={{fontSize:16}}>🗺️</span><span style={{fontFamily:"'Courier Prime',monospace",fontSize:12,color:T.inkFaint,letterSpacing:1.5,fontWeight:700}}>YOUR TREASURE MAP</span><span style={{fontFamily:"'Courier Prime',monospace",fontSize:9,color:T.accent,marginLeft:"auto"}}>DEVICE-ONLY</span></div>
             <div style={{display:"flex",gap:28}}>
               {[{n:antiCloud.routeCount,l:"Routes",c:T.teal},{n:antiCloud.totalDiscoveries,l:"Finds",c:T.gold},{n:antiCloud.proofCount,l:"Proofs",c:T.accent}].map(s=><div key={s.l}><div style={{fontSize:30,fontWeight:900,color:s.c,fontFamily:"'Playfair Display',serif"}}>{s.n}</div><div style={{fontSize:11,color:T.inkFaint,fontFamily:"'Courier Prime',monospace"}}>{s.l}</div></div>)}
             </div>
-          </RoughBox>
+          </div>
         )}
 
         {/* ── INPUT PHASE ── */}
@@ -509,8 +351,8 @@ export default function Unroute(){
           <div style={{animation:"fadeIn 0.5s ease"}}>
             <div style={{marginBottom:24}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <label style={{fontSize:17,fontFamily:"'Caveat',cursive",color:T.inkFaint,fontWeight:700,transform:'rotate(-1deg)',display:'inline-block'}}>Starting from</label>
-                <button onClick={()=>setUseManual(!useManual)} style={{fontSize:15,fontFamily:"'Caveat',cursive",fontWeight:700,padding:"6px 12px",background:"transparent",border:`1px dashed ${T.inkGhost}`,borderRadius:2,color:T.inkLight,cursor:"pointer",minHeight:32,transform:'rotate(0.5deg)'}}>
+                <label style={{fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700}}>STARTING FROM</label>
+                <button onClick={()=>setUseManual(!useManual)} style={{fontSize:11,fontFamily:"'Courier Prime',monospace",padding:"6px 12px",background:"transparent",border:`1px solid ${T.inkGhost}`,borderRadius:2,color:T.inkLight,cursor:"pointer",minHeight:32}}>
                   {useManual?"◉ Use GPS":"✎ Type it"}
                 </button>
               </div>
@@ -526,17 +368,17 @@ export default function Unroute(){
             </div>
 
             <div style={{marginBottom:24}}>
-              <label style={{display:'block',fontSize:17,fontFamily:"'Caveat',cursive",color:T.inkFaint,fontWeight:700,marginBottom:10,transform:'rotate(0.5deg)',transformOrigin:'left'}}>Destination</label>
+              <label style={{display:"block",fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700,marginBottom:10}}>DESTINATION</label>
               <PlaceAutocomplete value={dest} onChange={setDest} onSelect={(s)=>{if(!s){setDestCoords(null);setResolvedDest(null);return;}setDest(s.display);setDestCoords({lat:s.lat,lng:s.lng});setResolvedDest(s);}} placeholder="Bermondsey Station, E1 6AN, London Bridge…" accentColor={vibeColor} resolvedPlace={resolvedDest} />
             </div>
 
             {/* Vibe selector */}
             <div style={{marginBottom:28}}>
-              <label style={{display:'block',fontSize:17,fontFamily:"'Caveat',cursive",color:T.inkFaint,fontWeight:700,marginBottom:10,transform:'rotate(-0.8deg)',transformOrigin:'left'}}>Flavour of lost</label>
+              <label style={{display:"block",fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700,marginBottom:10}}>FLAVOUR OF LOST</label>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 {Object.entries(VIBE_ROUTES).map(([key,v],idx)=>{const isA=vibeKey===key;const tilt=(idx%2===0?1:-1)*(0.8+idx*0.2);return(
                   <button key={key} className={idx%2===0?"hd":"hd-alt"} onClick={()=>setVibeKey(key)} style={{padding:"16px",border:`2px solid ${isA?v.color:T.inkGhost}`,background:isA?v.soft:"transparent",cursor:"pointer",textAlign:"left",transition:"all 0.15s",minHeight:52,transform:`rotate(${tilt}deg)${isA?" scale(1.02)":""}`,boxShadow:isA?`2px 3px 0px ${v.color}40`:"none"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:20}}>{v.icon}</span><span style={{fontSize:15,fontWeight:700,color:isA?v.color:T.inkLight,fontFamily:"'Caveat',cursive",fontSize:17}}>{v.label}</span></div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><span style={{fontSize:20}}>{v.icon}</span><span style={{fontSize:15,fontWeight:700,color:isA?v.color:T.inkLight,fontFamily:"'Playfair Display',serif"}}>{v.label}</span></div>
                     <p style={{fontSize:12,color:T.inkFaint,fontFamily:"'Courier Prime',monospace",margin:0,lineHeight:1.4}}>{v.desc}</p>
                   </button>);
                 })}
@@ -546,14 +388,14 @@ export default function Unroute(){
             {/* Level slider */}
             <div style={{marginBottom:36}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-                <span style={{fontSize:17,fontFamily:"'Caveat',cursive",color:T.inkFaint,fontWeight:700,transform:'rotate(0.6deg)',display:'inline-block'}}>Discovery level</span>
-                <span style={{fontSize:44,fontFamily:"'Caveat',cursive",fontWeight:700,color:vibeColor,lineHeight:1,transform:'rotate(-1deg)',display:'inline-block'}}>{level}</span>
+                <span style={{fontSize:11,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,letterSpacing:2,fontWeight:700}}>DISCOVERY LEVEL</span>
+                <span style={{fontSize:40,fontFamily:"'Playfair Display',serif",fontWeight:900,color:vibeColor,lineHeight:1}}>{level}</span>
               </div>
               <input type="range" min="1" max="10" value={level} onChange={e=>setLevel(parseInt(e.target.value))} style={{width:"100%",height:6,appearance:"none",background:`linear-gradient(90deg, ${T.teal}, ${T.gold}, ${T.accent})`,borderRadius:3,outline:"none",cursor:"pointer"}} />
-              <div style={{marginTop:8,fontSize:19,color:T.inkFaint,fontFamily:"'Caveat',cursive",fontWeight:600,textAlign:"center",transform:'rotate(-0.5deg)'}}>{labels[level]}</div>
+              <div style={{marginTop:8,fontSize:13,color:T.inkFaint,fontFamily:"'Courier Prime',monospace",textAlign:"center",fontStyle:"italic"}}>{labels[level]}</div>
             </div>
 
-            <button className="hd" onClick={handleGenerate} disabled={!dest.trim()} style={{width:"100%",padding:"20px 24px",fontSize:22,fontWeight:700,fontFamily:"'Caveat',cursive",background:dest.trim()?T.ink:"transparent",color:dest.trim()?T.paper:T.inkGhost,border:`2.5px solid ${dest.trim()?T.ink:T.inkGhost}`,cursor:dest.trim()?"pointer":"default",transition:"all 0.3s",minHeight:60,letterSpacing:0.5,opacity:dest.trim()?1:0.4,transform:"rotate(-0.4deg)",boxShadow:dest.trim()?`3px 4px 0px ${T.inkGhost}`:"none"}}>
+            <button className="hd" onClick={handleGenerate} disabled={!dest.trim()} style={{width:"100%",padding:"20px 24px",fontSize:18,fontWeight:700,fontFamily:"'Playfair Display',serif",fontStyle:"italic",background:dest.trim()?T.ink:"transparent",color:dest.trim()?T.paper:T.inkGhost,border:`2.5px solid ${dest.trim()?T.ink:T.inkGhost}`,cursor:dest.trim()?"pointer":"default",transition:"all 0.3s",minHeight:60,letterSpacing:0.5,opacity:dest.trim()?1:0.4,transform:"rotate(-0.4deg)",boxShadow:dest.trim()?`3px 4px 0px ${T.inkGhost}`:"none"}}>
               Get Beautifully Lost →
             </button>
 
@@ -567,7 +409,7 @@ export default function Unroute(){
         {phase==="loading"&&(
           <div style={{textAlign:"center",padding:"80px 20px",animation:"fadeIn 0.4s ease"}}>
             <div style={{fontSize:56,marginBottom:28,animation:"float 2.5s ease-in-out infinite"}}>{VIBE_ROUTES[vibeKey]?.icon||"🧭"}</div>
-            <p style={{fontSize:22,fontFamily:"'Caveat',cursive",fontWeight:600,color:T.inkLight,lineHeight:1.6,transform:'rotate(-0.5deg)'}}>{loadingText}</p>
+            <p style={{fontSize:16,fontFamily:"'Courier Prime',monospace",color:T.inkLight,fontStyle:"italic",lineHeight:1.6}}>{loadingText}</p>
             <div style={{marginTop:32,width:160,height:2,background:T.inkGhost,borderRadius:1,margin:"32px auto 0",overflow:"hidden"}}>
               <div style={{height:"100%",background:vibeColor,borderRadius:1,animation:"loadBar 3.5s ease-in-out infinite"}} />
             </div>
@@ -579,7 +421,7 @@ export default function Unroute(){
         {phase==="result"&&route&&(
           <div style={{animation:"fadeIn 0.5s ease"}}>
             {/* Header card */}
-            <RoughBox color={T.inkGhost} seed={555} style={{marginBottom:24,background:T.paper,boxShadow:`2px 3px 12px ${T.shadow}`,position:"relative",padding:"24px"}}>
+            <div style={{padding:"24px",marginBottom:24,background:T.paper,border:`1.5px solid ${T.inkGhost}`,borderRadius:2,boxShadow:`2px 3px 12px ${T.shadow}, inset 0 0 30px rgba(139,105,20,0.02)`,position:"relative",overflow:"hidden"}}>
               <div style={{position:"absolute",top:0,right:0,width:40,height:40,background:"linear-gradient(135deg, transparent 50%, rgba(44,36,22,0.03) 50%)",pointerEvents:"none"}} />
               <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}}>
                 <Stamp color={vibeColor}>{VIBE_ROUTES[vibeKey]?.label}</Stamp>
@@ -603,14 +445,14 @@ export default function Unroute(){
                   <p style={{fontSize:10,fontFamily:"'Courier Prime',monospace",color:T.inkFaint,marginTop:6}}>{Object.keys(proofs).length} photos · {route.picks.length} stops</p>
                 </div>
               )}
-            </RoughBox>
+            </div>
 
             {/* Map */}
             {route.picks.length>0&&<div style={{marginBottom:24,borderRadius:3,overflow:"hidden",border:`1.5px solid ${T.inkGhost}`,boxShadow:`0 2px 8px ${T.shadow}`}}><RouteMap discoveries={route.picks} active={activeDisc} startLabel={startLabel} vibeColor={vibeColor} unlockedCount={route.picks.length} /></div>}
 
             {/* Pioneer */}
             {route.isPioneer&&(
-              <RoughBox color={T.gold} seed={777} style={{marginBottom:24,background:T.goldSoft,animation:"fadeIn 0.5s ease",padding:"28px"}}>
+              <div style={{padding:"28px",marginBottom:24,background:T.goldSoft,border:`1.5px dashed ${T.gold}`,borderRadius:3,animation:"fadeIn 0.5s ease"}}>
                 <div style={{display:"flex",alignItems:"flex-start",gap:14}}>
                   <span style={{fontSize:36}}>🏴‍☠️</span>
                   <div>
